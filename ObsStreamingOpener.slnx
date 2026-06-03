@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="ObsStreamingOpener.Api/ObsStreamingOpener.Api.csproj" />
+  <Project Path="ObsStreamingOpener.Application/ObsStreamingOpener.Application.csproj" />
+  <Project Path="ObsStreamingOpener.Database.Model/ObsStreamingOpener.Database.Model.csproj" />
+  <Project Path="ObsStreamingOpener.Database/ObsStreamingOpener.Database.csproj" />
+  <Project Path="ObsStreamingOpener.Domain/ObsStreamingOpener.Domain.csproj" />
+  <Project Path="ObsStreamingOpener.Infrastructure/ObsStreamingOpener.Infrastructure.csproj" />
+  <Project Path="ObsStreamingOpener.Tests/ObsStreamingOpener.Tests.csproj" />
+</Solution>

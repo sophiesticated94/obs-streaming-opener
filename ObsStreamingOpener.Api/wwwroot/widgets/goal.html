@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OBS Goal</title>
+  <link rel="stylesheet" href="/widgets/widgets.css">
+</head>
+<body>
+  <main class="widget">
+    <section class="goal">
+      <div class="label" id="goalLabel">Support goal</div>
+      <span id="goalValue" class="value">0 / 1000</span>
+      <div class="bar"><div id="goalFill" class="fill"></div></div>
+    </section>
+  </main>
+  <script type="module">
+    import { applyTheme, formatNumber, getJson, query } from "/widgets/shared.js";
+
+    applyTheme();
+    const interval = Number(query("interval", "2000"));
+    const target = Number(query("target", "1000"));
+    const label = query("label", "Support goal");
+    document.getElementById("goalLabel").textContent = label;
+
+    async function refresh() {
+      const data = await getJson("/api/stats/current");
+      const value = Number(data.tipTotal ?? 0);
+      const percent = target <= 0 ? 0 : Math.min(100, (value / target) * 100);
+      document.getElementById("goalValue").textContent = `${formatNumber(value)} / ${formatNumber(target)}`;
+      document.getElementById("goalFill").style.width = `${percent}%`;
+    }
+
+    refresh().catch(console.error);
+    setInterval(() => refresh().catch(console.error), interval);
+  </script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OBS Stream Stats</title>
+  <link rel="stylesheet" href="/widgets/widgets.css">
+</head>
+<body>
+  <main class="widget">
+    <section class="stats-grid">
+      <div class="metric"><span class="label">Viewers</span><span id="viewers" class="value">0</span></div>
+      <div class="metric"><span class="label">Likes</span><span id="likes" class="value">0</span></div>
+      <div class="metric"><span class="label">Chat/min</span><span id="chatRate" class="value">0</span></div>
+      <div class="metric"><span class="label">Tips</span><span id="tips" class="value">0</span></div>
+    </section>
+    <section class="event">
+      <strong id="streamTitle">Current stream</strong>
+      <p id="latestEvent" class="muted">Waiting for events</p>
+      <span id="updated" class="muted"></span>
+    </section>
+  </main>
+  <script type="module">
+    import { applyTheme, formatNumber, getJson, query } from "/widgets/shared.js";
+
+    applyTheme();
+    const interval = Number(query("interval", "2000"));
+
+    async function refresh() {
+      const data = await getJson("/api/widgets/stats/data");
+      document.getElementById("viewers").textContent = formatNumber(data.currentStats.concurrentViewers);
+      document.getElementById("likes").textContent = formatNumber(data.currentStats.likes);
+      document.getElementById("chatRate").textContent = formatNumber(data.currentStats.chatMessagesPerMinute);
+      document.getElementById("tips").textContent = formatNumber(data.currentStats.tipTotal);
+      document.getElementById("streamTitle").textContent = data.currentStats.streamTitle ?? "Current stream";
+      const latest = data.recentEvents[0];
+      document.getElementById("latestEvent").textContent = latest ? `${latest.actorName ?? latest.provider}: ${latest.message ?? latest.title ?? latest.eventType}` : "Waiting for events";
+      document.getElementById("updated").textContent = new Date(data.generatedAt).toLocaleTimeString();
+    }
+
+    refresh().catch(console.error);
+    setInterval(() => refresh().catch(console.error), interval);
+  </script>
+</body>
+</html>

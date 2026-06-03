@@ -1,0 +1,27 @@
+@ObsStreamingOpener.Api_HostAddress = http://localhost:5198
+
+GET {{ObsStreamingOpener.Api_HostAddress}}/health
+
+###
+
+GET {{ObsStreamingOpener.Api_HostAddress}}/api/stats/current
+Accept: application/json
+
+###
+
+GET {{ObsStreamingOpener.Api_HostAddress}}/api/events/recent?limit=10
+Accept: application/json
+
+###
+
+POST {{ObsStreamingOpener.Api_HostAddress}}/api/dev/events/sample
+Content-Type: application/json
+
+{
+  "provider": "Custom",
+  "eventType": "Tip",
+  "actorName": "Test viewer",
+  "message": "Great stream",
+  "amount": 25,
+  "currency": "PLN"
+}
