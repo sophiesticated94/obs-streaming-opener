@@ -1,38 +1,33 @@
 # OBS Streaming Opener
 
-Local-first .NET Web API for collecting streaming events, channel metrics, and audience relationships, storing them in SQLite, and serving browser-source widgets for OBS.
+Local-first .NET Web API for OBS browser-source widgets. It stores stream events, channel metrics, audience relationships, provider cursors, and Hangfire jobs in one SQLite database.
 
-## Architecture
+## Requirements
 
-- `ObsStreamingOpener.Api` hosts the Web API, health checks, Hangfire dashboard, and static OBS widgets.
-- `ObsStreamingOpener.Application` contains provider orchestration, event ingestion, audience ingestion, stats queries, Hangfire job classes, and polling services.
-- `ObsStreamingOpener.Domain` contains provider-neutral enums and value types.
-- `ObsStreamingOpener.Database.Model` contains EF Core code-first entity models with attributes.
-- `ObsStreamingOpener.Database` owns `StreamingOpenerDbContext`, SQLite registration, initialization, and repository/query implementations.
-- `ObsStreamingOpener.Infrastructure` contains common implementations behind interfaces, including clocks, HTTP clients, YouTube API access, and provider stubs.
-- `ObsStreamingOpener.Tests` covers channel-scoped event ingestion, cursor state, stats aggregation, and audience relationship renewal.
+- .NET SDK pinned by `global.json`
+- PowerShell examples below assume Windows
+- YouTube Data API key only if real provider polling is enabled
 
-## Domain Model
+## Projects
+
+- `ObsStreamingOpener.Api` - Web API, health checks, Hangfire dashboard, static widgets
+- `ObsStreamingOpener.Application` - use cases, provider orchestration, polling, Hangfire job classes
+- `ObsStreamingOpener.Database.Model` - EF Core code-first entities
+- `ObsStreamingOpener.Database` - `StreamingOpenerDbContext`, SQLite setup, repositories, initialization
+- `ObsStreamingOpener.Domain` - provider-neutral enums
+- `ObsStreamingOpener.Infrastructure` - clocks, HTTP clients, provider adapters/stubs
+- `ObsStreamingOpener.Tests` - unit tests plus endpoint integration tests with EF InMemory
+
+## Data Model
 
 The app is channel-first:
 
-- `MonitoredAccount`: local creator/profile in this app.
-- `MonitoredChannel`: provider channel/profile owned by a monitored account.
-- `ProviderConnection`: technical connection/configuration for a monitored channel.
-- `ProviderCursor`: last-read sync state for a provider connection.
-- `StreamSession`: optional live-stream context for a monitored channel.
-- `StreamEvent`: event owned by a monitored channel, optionally linked to a stream session.
-- `MetricSnapshot`: point-in-time metric owned by a monitored channel, optionally linked to a stream session.
-- `AudienceMember`: one known audience identity from a provider.
-- `AudienceRelationshipPeriod`: one free or paid relationship period between an audience member and a channel.
+- `MonitoredAccount` owns one or more `MonitoredChannel` records.
+- `ProviderConnection`, `StreamEvent`, `MetricSnapshot`, `StreamSession`, and audience relationships belong to a `MonitoredChannel`.
+- `StreamSession` is optional context, so events and metrics can exist during a stream or between streams.
+- Audience terms are unified as `AudienceMember` and `AudienceRelationshipPeriod`; provider-specific names like subscriber, member, or patron stay in raw provider payloads/display labels.
 
-Provider-specific terms stay at the adapter/display edge. Internally we use audience terms:
-
-- free relationship: lightweight channel relationship;
-- paid relationship: recurring paid/support relationship when a provider exposes it;
-- `AudienceMemberCount` and `PaidAudienceMemberCount` for metric snapshots.
-
-## Run Locally
+## Run
 
 ```powershell
 dotnet restore
@@ -41,33 +36,32 @@ dotnet test
 dotnet run --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
 ```
 
-The API defaults to local SQLite files under `ObsStreamingOpener.Api/data/`.
+Default local URL:
 
-Useful URLs:
+```text
+http://localhost:5198
+```
 
-- Health: `http://localhost:5198/health`
-- OpenAPI: `http://localhost:5198/openapi/v1.json` in Development
-- Hangfire: `http://localhost:5198/hangfire`
-- Stats widget: `http://localhost:5198/widgets/stats.html`
-- Recent events widget: `http://localhost:5198/widgets/recent-events.html`
-- Audience widget: `http://localhost:5198/widgets/audience.html`
-- Goal widget: `http://localhost:5198/widgets/goal.html?target=1000&label=Support%20goal`
+The first run creates:
 
-OBS can use those widget URLs as Browser Sources. Query parameters include `channelId=...`, `theme=light`, and `interval=2000`.
+```text
+ObsStreamingOpener.Api\data\streaming-opener.db
+```
+
+The same SQLite file is used by EF Core application data and Hangfire storage.
 
 ## Configuration
 
-`appsettings.json` contains local defaults:
+Default `ObsStreamingOpener.Api/appsettings.json`:
 
 ```json
 {
   "ConnectionStrings": {
-    "StreamingOpener": "Data Source=data/streaming-opener.db",
-    "Hangfire": "Data Source=data/hangfire.db"
+    "StreamingOpener": "Data Source=data/streaming-opener.db"
   },
   "StreamingMonitor": {
-    "EnableYouTubePolling": false,
-    "YouTubeMetricPollingSeconds": 10
+    "EnableStreamDataPolling": false,
+    "StreamDataPollingSeconds": 5
   },
   "YouTube": {
     "ApiKey": "",
@@ -76,31 +70,93 @@ OBS can use those widget URLs as Browser Sources. Query parameters include `chan
 }
 ```
 
-Set the YouTube API key with user secrets or environment variables:
+Use user secrets for local YouTube config:
 
 ```powershell
 dotnet user-secrets init --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
 dotnet user-secrets set "YouTube:ApiKey" "<your-api-key>" --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
-dotnet user-secrets set "StreamingMonitor:EnableYouTubePolling" "true" --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
+dotnet user-secrets set "StreamingMonitor:EnableStreamDataPolling" "true" --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
 ```
 
-For YouTube connections:
+For real YouTube monitoring, a `ProviderConnection` for the channel must contain:
 
-- `ProviderConnection.ExternalStreamId`: video ID for viewer/like metrics.
-- `ProviderConnection.ExternalChannelId`: live chat ID for chat polling.
+- `ExternalStreamId` - YouTube video ID for viewer/like metric polling
+- `ExternalChannelId` - YouTube live chat ID for chat polling
+
+The current skeleton seeds a default account/channel automatically. Admin endpoints for managing provider connections are not implemented yet.
+
+## Smoke Test With Sample Data
+
+Start the API in Development, then create a sample event:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:5198/api/dev/events/sample `
+  -ContentType 'application/json' `
+  -Body '{"provider":"Custom","eventType":"Tip","actorName":"Test viewer","message":"Great stream","amount":25,"currency":"PLN"}'
+```
+
+Create a sample audience relationship:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:5198/api/dev/events/audience/sample `
+  -ContentType 'application/json' `
+  -Body '{"provider":"Custom","externalAudienceId":"demo-1","displayName":"Demo audience","relationshipKind":"Free"}'
+```
+
+Check data:
+
+```powershell
+Invoke-RestMethod http://localhost:5198/health
+Invoke-RestMethod http://localhost:5198/api/channels
+Invoke-RestMethod http://localhost:5198/api/events/recent
+Invoke-RestMethod http://localhost:5198/api/stats/current
+Invoke-RestMethod http://localhost:5198/api/widgets/stats/data
+```
+
+If you want channel-scoped URLs, copy the `id` from `GET /api/channels` and pass it as `channelId`.
+
+## OBS Widgets
+
+Add a Browser Source in OBS and use one of these URLs:
+
+```text
+http://localhost:5198/widgets/stats.html
+http://localhost:5198/widgets/recent-events.html
+http://localhost:5198/widgets/audience.html
+http://localhost:5198/widgets/goal.html?target=1000&label=Support%20goal
+```
+
+Useful query params:
+
+```text
+channelId=<guid>
+theme=light
+interval=2000
+```
+
+Example:
+
+```text
+http://localhost:5198/widgets/stats.html?channelId=<guid>&theme=light&interval=2000
+```
 
 ## API Endpoints
+
+Channel/account:
 
 - `GET /api/accounts`
 - `GET /api/channels`
 - `GET /api/channels/{channelId}`
+
+Channel-scoped data:
+
 - `GET /api/channels/{channelId}/events/recent?type=&limit=`
 - `GET /api/channels/{channelId}/stats/current`
 - `GET /api/channels/{channelId}/stats/summary?from=&to=`
 - `GET /api/channels/{channelId}/audience/recent`
 - `GET /api/channels/{channelId}/audience/{audienceMemberId}/history`
 
-Compatibility shortcuts use the default channel:
+Compatibility shortcuts use the default channel unless `channelId` is provided:
 
 - `GET /api/streams/current`
 - `GET /api/events/recent?channelId=&provider=&type=&limit=`
@@ -108,24 +164,26 @@ Compatibility shortcuts use the default channel:
 - `GET /api/stats/summary?channelId=&from=&to=`
 - `GET /api/widgets/{widgetKey}/data?channelId=`
 
-Development-only samples:
+Development-only:
 
-```powershell
-Invoke-RestMethod -Method Post http://localhost:5198/api/dev/events/sample `
-  -ContentType 'application/json' `
-  -Body '{"provider":"Custom","eventType":"Tip","actorName":"Test viewer","message":"Great stream","amount":25,"currency":"PLN"}'
+- `POST /api/dev/events/sample`
+- `POST /api/dev/events/audience/sample`
 
-Invoke-RestMethod -Method Post http://localhost:5198/api/dev/events/audience/sample `
-  -ContentType 'application/json' `
-  -Body '{"provider":"Custom","externalAudienceId":"demo-1","displayName":"Demo audience","relationshipKind":"Free"}'
-```
+## Hangfire
 
-## Adding Providers
+- Dashboard: `http://localhost:5198/hangfire`
+- Storage: the same SQLite database as the app, from `ConnectionStrings:StreamingOpener`
+- Stream data polling runs every 5 seconds through the hosted service when enabled
+- Account data polling is scheduled through Hangfire once per minute
+- Hangfire job classes and registration live in `ObsStreamingOpener.Application`
+- API only wires Hangfire storage/server/dashboard
 
-1. Add a provider client in `ObsStreamingOpener.Infrastructure`.
+## Adding A Provider
+
+1. Add the provider client/wrapper in `ObsStreamingOpener.Infrastructure`.
 2. Implement `IStreamingProviderMonitor` or `ITipProviderMonitor`.
-3. Normalize external payloads into `ProviderEvent` or `ProviderAudienceRelationship`.
-4. Persist cursors through `IProviderCursorStore`.
-5. Register the monitor as `IProviderMonitor` in infrastructure DI.
+3. Normalize provider data into `ProviderEvent`, `ProviderAudienceRelationship`, or metric snapshots.
+4. Store page tokens/cursors through `IProviderCursorStore`.
+5. Register stream-scoped monitors as `IStreamingProviderMonitor` and account-scoped monitors as `ITipProviderMonitor` or a future account monitor contract.
 
-Tipply and Patronite are registered as stubs so they already appear in the provider orchestration path.
+Tipply and Patronite are currently registered as stubs.

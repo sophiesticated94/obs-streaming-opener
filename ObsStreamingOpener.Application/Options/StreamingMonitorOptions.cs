@@ -2,7 +2,7 @@ namespace ObsStreamingOpener.Application.Options;
 
 public sealed class StreamingMonitorOptions
 {
-    public bool EnableYouTubePolling { get; set; }
+    public bool EnableStreamDataPolling { get; set; }
 
-    public int YouTubeMetricPollingSeconds { get; set; } = 10;
+    public int StreamDataPollingSeconds { get; set; } = 5;
 }

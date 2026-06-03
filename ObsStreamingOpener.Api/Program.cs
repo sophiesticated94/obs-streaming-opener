@@ -19,9 +19,14 @@ builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHangfire((_, configuration) =>
 {
-    var hangfireConnectionString = builder.Configuration.GetConnectionString("Hangfire")
-        ?? "Data Source=data/hangfire.db";
+    var hangfireConnectionString = builder.Configuration.GetConnectionString("StreamingOpener")
+        ?? "Data Source=data/streaming-opener.db";
     var hangfireDatabasePath = ResolveSqliteDatabasePath(hangfireConnectionString);
+    var hangfireDirectory = Path.GetDirectoryName(hangfireDatabasePath);
+    if (!string.IsNullOrWhiteSpace(hangfireDirectory))
+    {
+        Directory.CreateDirectory(hangfireDirectory);
+    }
 
     configuration
         .UseSimpleAssemblyNameTypeSerializer()

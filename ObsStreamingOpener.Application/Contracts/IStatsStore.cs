@@ -8,6 +8,8 @@ public interface IStatsStore
 {
     Task AddMetricSnapshotAsync(MetricSnapshot snapshot, CancellationToken cancellationToken = default);
 
+    Task<bool> AddMetricSnapshotIfChangedAsync(MetricSnapshot snapshot, CancellationToken cancellationToken = default);
+
     Task<MetricSnapshot?> GetLatestMetricAsync(Guid monitoredChannelId, MetricKind metric, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<MetricSnapshot>> GetMetricsAsync(Guid monitoredChannelId, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);

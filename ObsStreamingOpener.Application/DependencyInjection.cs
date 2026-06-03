@@ -16,9 +16,10 @@ public static class DependencyInjection
         services.AddScoped<IEventIngestionService, EventIngestionService>();
         services.AddScoped<IAudienceIngestionService, AudienceIngestionService>();
         services.AddScoped<IStatsQueryService, StatsQueryService>();
-        services.AddScoped<ProviderMonitorRunner>();
+        services.AddScoped<IStreamDataPoller, StreamDataPoller>();
+        services.AddScoped<IAccountDataPoller, AccountDataPoller>();
         services.AddScoped<ProviderSyncJobs>();
-        services.AddHostedService<YouTubeMetricPollingService>();
+        services.AddHostedService<StreamDataPollingService>();
 
         return services;
     }

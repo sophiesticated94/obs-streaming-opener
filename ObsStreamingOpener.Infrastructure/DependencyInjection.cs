@@ -25,8 +25,10 @@ public static class DependencyInjection
         services.AddScoped<IStreamingProviderMonitor>(sp => sp.GetRequiredService<YouTubeLiveChatMonitor>());
         services.AddScoped<IProviderMonitor>(sp => sp.GetRequiredService<YouTubeLiveChatMonitor>());
 
-        services.AddScoped<IProviderMonitor>(sp => new StubTipProviderMonitor(ProviderKind.Tipply.ToString(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<StubTipProviderMonitor>>()));
-        services.AddScoped<IProviderMonitor>(sp => new StubTipProviderMonitor(ProviderKind.Patronite.ToString(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<StubTipProviderMonitor>>()));
+        services.AddScoped<ITipProviderMonitor>(sp => new StubTipProviderMonitor(ProviderKind.Tipply.ToString(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<StubTipProviderMonitor>>()));
+        services.AddScoped<ITipProviderMonitor>(sp => new StubTipProviderMonitor(ProviderKind.Patronite.ToString(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<StubTipProviderMonitor>>()));
+        services.AddScoped<IProviderMonitor>(sp => sp.GetServices<ITipProviderMonitor>().First(x => x.Name == ProviderKind.Tipply.ToString()));
+        services.AddScoped<IProviderMonitor>(sp => sp.GetServices<ITipProviderMonitor>().First(x => x.Name == ProviderKind.Patronite.ToString()));
 
         return services;
     }

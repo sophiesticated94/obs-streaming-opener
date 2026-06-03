@@ -208,6 +208,29 @@ public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<bool> AddMetricSnapshotIfChangedAsync(MetricSnapshot snapshot, CancellationToken cancellationToken = default)
+    {
+        var latest = await dbContext.MetricSnapshots
+            .AsNoTracking()
+            .Where(x => x.MonitoredChannelId == snapshot.MonitoredChannelId
+                && x.Provider == snapshot.Provider
+                && x.Metric == snapshot.Metric
+                && x.StreamSessionId == snapshot.StreamSessionId
+                && x.ProviderConnectionId == snapshot.ProviderConnectionId
+                && x.Unit == snapshot.Unit)
+            .OrderByDescending(x => x.CapturedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (latest is not null && latest.Value == snapshot.Value)
+        {
+            return false;
+        }
+
+        dbContext.MetricSnapshots.Add(snapshot);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task<MetricSnapshot?> GetLatestMetricAsync(Guid monitoredChannelId, MetricKind metric, CancellationToken cancellationToken = default)
     {
         var metrics = await dbContext.MetricSnapshots

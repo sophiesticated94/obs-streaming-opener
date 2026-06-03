@@ -7,8 +7,13 @@ public static class HangfireJobRegistrar
     public static void RegisterRecurringJobs(IRecurringJobManager recurringJobs)
     {
         recurringJobs.AddOrUpdate<ProviderSyncJobs>(
-            "provider-sync",
-            job => job.PollProvidersAsync(CancellationToken.None),
+            "stream-data-sync",
+            job => job.PollStreamDataAsync(CancellationToken.None),
+            Cron.Minutely);
+
+        recurringJobs.AddOrUpdate<ProviderSyncJobs>(
+            "account-data-sync",
+            job => job.PollAccountDataAsync(CancellationToken.None),
             Cron.Minutely);
     }
 }

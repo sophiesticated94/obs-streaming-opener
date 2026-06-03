@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using ObsStreamingOpener.Application.Contracts;
 using ObsStreamingOpener.Application.Dto;
@@ -158,6 +157,81 @@ public sealed class DatabaseRepositoryTests
     }
 
     [Fact]
+    public async Task AddMetricSnapshotIfChangedAsync_SkipsUnchangedValueForSameMetricScope()
+    {
+        await using var fixture = await RepositoryFixture.CreateAsync();
+        var channel = await fixture.Repository.GetDefaultChannelEntityAsync();
+        var connection = new ProviderConnection
+        {
+            MonitoredChannelId = channel.Id,
+            Provider = ProviderKind.YouTube,
+            ExternalChannelId = "live-chat-id",
+            ExternalStreamId = "video-id",
+            DisplayName = "YouTube"
+        };
+        fixture.DbContext.ProviderConnections.Add(connection);
+        await fixture.DbContext.SaveChangesAsync();
+
+        var first = await fixture.Repository.AddMetricSnapshotIfChangedAsync(new MetricSnapshot
+        {
+            MonitoredChannelId = channel.Id,
+            ProviderConnectionId = connection.Id,
+            Provider = ProviderKind.YouTube,
+            Metric = MetricKind.ConcurrentViewers,
+            SnapshotReason = SnapshotReason.ScheduledPoll,
+            Value = 42,
+            Unit = "viewers",
+            CapturedAt = fixture.Clock.UtcNow
+        });
+        var second = await fixture.Repository.AddMetricSnapshotIfChangedAsync(new MetricSnapshot
+        {
+            MonitoredChannelId = channel.Id,
+            ProviderConnectionId = connection.Id,
+            Provider = ProviderKind.YouTube,
+            Metric = MetricKind.ConcurrentViewers,
+            SnapshotReason = SnapshotReason.ScheduledPoll,
+            Value = 42,
+            Unit = "viewers",
+            CapturedAt = fixture.Clock.UtcNow.AddSeconds(5)
+        });
+
+        Assert.True(first);
+        Assert.False(second);
+        Assert.Single(await fixture.Repository.GetMetricsAsync(channel.Id, fixture.Clock.UtcNow.AddMinutes(-1), fixture.Clock.UtcNow.AddMinutes(1)));
+    }
+
+    [Fact]
+    public async Task AddMetricSnapshotIfChangedAsync_StoresChangedValueForSameMetricScope()
+    {
+        await using var fixture = await RepositoryFixture.CreateAsync();
+        var channel = await fixture.Repository.GetDefaultChannelEntityAsync();
+
+        await fixture.Repository.AddMetricSnapshotIfChangedAsync(new MetricSnapshot
+        {
+            MonitoredChannelId = channel.Id,
+            Provider = ProviderKind.YouTube,
+            Metric = MetricKind.AudienceMemberCount,
+            SnapshotReason = SnapshotReason.ScheduledPoll,
+            Value = 100,
+            Unit = "members",
+            CapturedAt = fixture.Clock.UtcNow
+        });
+        var changed = await fixture.Repository.AddMetricSnapshotIfChangedAsync(new MetricSnapshot
+        {
+            MonitoredChannelId = channel.Id,
+            Provider = ProviderKind.YouTube,
+            Metric = MetricKind.AudienceMemberCount,
+            SnapshotReason = SnapshotReason.ScheduledPoll,
+            Value = 101,
+            Unit = "members",
+            CapturedAt = fixture.Clock.UtcNow.AddSeconds(5)
+        });
+
+        Assert.True(changed);
+        Assert.Equal(2, (await fixture.Repository.GetMetricsAsync(channel.Id, fixture.Clock.UtcNow.AddMinutes(-1), fixture.Clock.UtcNow.AddMinutes(1))).Count);
+    }
+
+    [Fact]
     public async Task AudienceIngestion_CreatesRelationshipAndDetectsRenewal()
     {
         await using var fixture = await RepositoryFixture.CreateAsync();
@@ -201,11 +275,8 @@ public sealed class DatabaseRepositoryTests
 
     private sealed class RepositoryFixture : IAsyncDisposable
     {
-        private readonly SqliteConnection _connection;
-
-        private RepositoryFixture(SqliteConnection connection, StreamingOpenerDbContext dbContext, TestClock clock)
+        private RepositoryFixture(StreamingOpenerDbContext dbContext, TestClock clock)
         {
-            _connection = connection;
             DbContext = dbContext;
             Clock = clock;
             Repository = new StreamingOpenerRepository(dbContext, clock);
@@ -219,20 +290,17 @@ public sealed class DatabaseRepositoryTests
 
         public static async Task<RepositoryFixture> CreateAsync()
         {
-            var connection = new SqliteConnection("Data Source=:memory:");
-            await connection.OpenAsync();
             var options = new DbContextOptionsBuilder<StreamingOpenerDbContext>()
-                .UseSqlite(connection)
+                .UseInMemoryDatabase($"repo-tests-{Guid.NewGuid():N}")
                 .Options;
             var dbContext = new StreamingOpenerDbContext(options);
             await dbContext.Database.EnsureCreatedAsync();
-            return new RepositoryFixture(connection, dbContext, new TestClock());
+            return new RepositoryFixture(dbContext, new TestClock());
         }
 
         public async ValueTask DisposeAsync()
         {
             await DbContext.DisposeAsync();
-            await _connection.DisposeAsync();
         }
     }
 

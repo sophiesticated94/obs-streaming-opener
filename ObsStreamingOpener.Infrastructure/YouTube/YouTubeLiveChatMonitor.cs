@@ -22,9 +22,14 @@ public sealed class YouTubeLiveChatMonitor(
         var connections = await channelStore.GetEnabledConnectionsAsync(ProviderKind.YouTube, cancellationToken);
         foreach (var connection in connections.Where(x => !string.IsNullOrWhiteSpace(x.ExternalChannelId)))
         {
+            var currentStream = await streamSessionStore.GetCurrentSessionAsync(connection.MonitoredChannelId, cancellationToken);
+            if (currentStream is null)
+            {
+                continue;
+            }
+
             var pageToken = await cursorStore.GetCursorAsync(connection.Id, LiveChatPageTokenCursor, cancellationToken);
             var result = await youtubeApiClient.GetLiveChatMessagesAsync(connection.ExternalChannelId, pageToken, cancellationToken);
-            var currentStream = await streamSessionStore.GetCurrentSessionAsync(connection.MonitoredChannelId, cancellationToken);
 
             foreach (var message in result.Messages)
             {
