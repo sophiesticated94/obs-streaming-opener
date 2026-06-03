@@ -4,8 +4,9 @@ public enum StreamEventType
 {
     ChatMessage = 1,
     Tip = 2,
-    Support = 3,
-    Subscription = 4,
-    ViewerMilestone = 5,
+    AudienceRelationshipStarted = 3,
+    AudienceRelationshipEnded = 4,
+    AudienceRelationshipRenewed = 5,
+    ViewerMilestone = 6,
     System = 100
 }

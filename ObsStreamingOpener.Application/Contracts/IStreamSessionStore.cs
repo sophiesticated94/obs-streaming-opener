@@ -6,7 +6,7 @@ namespace ObsStreamingOpener.Application.Contracts;
 
 public interface IStreamSessionStore
 {
-    Task<StreamSession> GetOrCreateCurrentSessionAsync(CancellationToken cancellationToken = default);
+    Task<StreamSession> GetOrCreateCurrentSessionAsync(Guid monitoredChannelId, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<ProviderConnectionDto>> GetEnabledConnectionsAsync(ProviderKind? provider = null, CancellationToken cancellationToken = default);
+    Task<StreamSessionDto?> GetCurrentSessionAsync(Guid monitoredChannelId, CancellationToken cancellationToken = default);
 }

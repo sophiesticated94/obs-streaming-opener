@@ -4,7 +4,7 @@ namespace ObsStreamingOpener.Application.Dto;
 
 public sealed record ProviderConnectionDto(
     Guid Id,
-    Guid StreamSessionId,
+    Guid MonitoredChannelId,
     ProviderKind Provider,
     string ExternalChannelId,
     string? ExternalStreamId,

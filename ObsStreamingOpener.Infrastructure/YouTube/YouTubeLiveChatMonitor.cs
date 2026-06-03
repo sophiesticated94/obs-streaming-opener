@@ -6,6 +6,7 @@ using ObsStreamingOpener.Domain;
 namespace ObsStreamingOpener.Infrastructure.YouTube;
 
 public sealed class YouTubeLiveChatMonitor(
+    IChannelStore channelStore,
     IStreamSessionStore streamSessionStore,
     IProviderCursorStore cursorStore,
     IEventIngestionService ingestionService,
@@ -18,16 +19,19 @@ public sealed class YouTubeLiveChatMonitor(
 
     public async Task PollAsync(CancellationToken cancellationToken = default)
     {
-        var connections = await streamSessionStore.GetEnabledConnectionsAsync(ProviderKind.YouTube, cancellationToken);
+        var connections = await channelStore.GetEnabledConnectionsAsync(ProviderKind.YouTube, cancellationToken);
         foreach (var connection in connections.Where(x => !string.IsNullOrWhiteSpace(x.ExternalChannelId)))
         {
             var pageToken = await cursorStore.GetCursorAsync(connection.Id, LiveChatPageTokenCursor, cancellationToken);
             var result = await youtubeApiClient.GetLiveChatMessagesAsync(connection.ExternalChannelId, pageToken, cancellationToken);
+            var currentStream = await streamSessionStore.GetCurrentSessionAsync(connection.MonitoredChannelId, cancellationToken);
 
             foreach (var message in result.Messages)
             {
                 await ingestionService.IngestAsync(new ProviderEvent(
-                    connection.StreamSessionId,
+                    connection.MonitoredChannelId,
+                    currentStream?.Id,
+                    null,
                     ProviderKind.YouTube,
                     StreamEventType.ChatMessage,
                     message.Id,

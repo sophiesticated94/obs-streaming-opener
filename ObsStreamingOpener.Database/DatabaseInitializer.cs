@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ObsStreamingOpener.Database.Model;
+using ObsStreamingOpener.Domain;
 
 namespace ObsStreamingOpener.Database;
 
@@ -9,13 +10,24 @@ public sealed class DatabaseInitializer(StreamingOpenerDbContext dbContext)
     {
         await dbContext.Database.EnsureCreatedAsync(cancellationToken);
 
-        if (!await dbContext.StreamSessions.AnyAsync(cancellationToken))
+        if (!await dbContext.MonitoredAccounts.AnyAsync(cancellationToken))
         {
-            dbContext.StreamSessions.Add(new StreamSession
+            var account = new MonitoredAccount
             {
-                Title = "Current stream",
-                IsActive = true,
-                StartedAt = DateTimeOffset.UtcNow
+                DisplayName = "Default account",
+                IsDefault = true,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            dbContext.MonitoredAccounts.Add(account);
+            dbContext.MonitoredChannels.Add(new MonitoredChannel
+            {
+                MonitoredAccount = account,
+                Provider = ProviderKind.YouTube,
+                ExternalChannelId = "default-channel",
+                DisplayName = "Default channel",
+                IsDefault = true,
+                IsEnabled = true,
+                CreatedAt = DateTimeOffset.UtcNow
             });
         }
 

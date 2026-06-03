@@ -15,6 +15,7 @@
 
     applyTheme();
     const interval = Number(query("interval", "1500"));
+    const channelId = query("channelId", "");
 
     function renderEvent(event) {
       const amount = event.amount ? formatMoney(event.amount, event.currency) : "";
@@ -26,7 +27,7 @@
     }
 
     async function refresh() {
-      const data = await getJson("/api/events/recent?limit=10");
+      const data = await getJson(`/api/events/recent?limit=10${channelId ? `&channelId=${channelId}` : ""}`);
       document.getElementById("events").innerHTML = data.length
         ? data.map(renderEvent).join("")
         : `<article class="event"><strong>Ready</strong><p>Waiting for stream events</p><span class="muted"></span></article>`;

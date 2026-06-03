@@ -21,10 +21,11 @@
     const interval = Number(query("interval", "2000"));
     const target = Number(query("target", "1000"));
     const label = query("label", "Support goal");
+    const channelId = query("channelId", "");
     document.getElementById("goalLabel").textContent = label;
 
     async function refresh() {
-      const data = await getJson("/api/stats/current");
+      const data = await getJson(`/api/stats/current${channelId ? `?channelId=${channelId}` : ""}`);
       const value = Number(data.tipTotal ?? 0);
       const percent = target <= 0 ? 0 : Math.min(100, (value / target) * 100);
       document.getElementById("goalValue").textContent = `${formatNumber(value)} / ${formatNumber(target)}`;

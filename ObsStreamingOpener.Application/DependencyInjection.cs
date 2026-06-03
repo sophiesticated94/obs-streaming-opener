@@ -14,6 +14,7 @@ public static class DependencyInjection
     {
         services.Configure<StreamingMonitorOptions>(configuration.GetSection("StreamingMonitor"));
         services.AddScoped<IEventIngestionService, EventIngestionService>();
+        services.AddScoped<IAudienceIngestionService, AudienceIngestionService>();
         services.AddScoped<IStatsQueryService, StatsQueryService>();
         services.AddScoped<ProviderMonitorRunner>();
         services.AddScoped<ProviderSyncJobs>();

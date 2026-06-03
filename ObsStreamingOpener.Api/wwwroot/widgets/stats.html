@@ -13,6 +13,8 @@
       <div class="metric"><span class="label">Likes</span><span id="likes" class="value">0</span></div>
       <div class="metric"><span class="label">Chat/min</span><span id="chatRate" class="value">0</span></div>
       <div class="metric"><span class="label">Tips</span><span id="tips" class="value">0</span></div>
+      <div class="metric"><span class="label">Audience</span><span id="audience" class="value">0</span></div>
+      <div class="metric"><span class="label">Paid</span><span id="paidAudience" class="value">0</span></div>
     </section>
     <section class="event">
       <strong id="streamTitle">Current stream</strong>
@@ -25,13 +27,16 @@
 
     applyTheme();
     const interval = Number(query("interval", "2000"));
+    const channelId = query("channelId", "");
 
     async function refresh() {
-      const data = await getJson("/api/widgets/stats/data");
+      const data = await getJson(`/api/widgets/stats/data${channelId ? `?channelId=${channelId}` : ""}`);
       document.getElementById("viewers").textContent = formatNumber(data.currentStats.concurrentViewers);
       document.getElementById("likes").textContent = formatNumber(data.currentStats.likes);
       document.getElementById("chatRate").textContent = formatNumber(data.currentStats.chatMessagesPerMinute);
       document.getElementById("tips").textContent = formatNumber(data.currentStats.tipTotal);
+      document.getElementById("audience").textContent = formatNumber(data.currentStats.audienceMemberCount);
+      document.getElementById("paidAudience").textContent = formatNumber(data.currentStats.paidAudienceMemberCount);
       document.getElementById("streamTitle").textContent = data.currentStats.streamTitle ?? "Current stream";
       const latest = data.recentEvents[0];
       document.getElementById("latestEvent").textContent = latest ? `${latest.actorName ?? latest.provider}: ${latest.message ?? latest.title ?? latest.eventType}` : "Waiting for events";

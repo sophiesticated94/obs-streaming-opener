@@ -4,6 +4,9 @@ namespace ObsStreamingOpener.Application.Dto;
 
 public sealed record RecentEventDto(
     Guid Id,
+    Guid MonitoredChannelId,
+    Guid? StreamSessionId,
+    Guid? AudienceMemberId,
     ProviderKind Provider,
     StreamEventType EventType,
     string? ActorName,

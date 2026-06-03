@@ -10,7 +10,11 @@ public sealed class StreamEvent
     public Guid Id { get; set; } = Guid.NewGuid();
 
     [Required]
-    public Guid StreamSessionId { get; set; }
+    public Guid MonitoredChannelId { get; set; }
+
+    public Guid? StreamSessionId { get; set; }
+
+    public Guid? AudienceMemberId { get; set; }
 
     [Required]
     public ProviderKind Provider { get; set; }
@@ -49,4 +53,10 @@ public sealed class StreamEvent
 
     [ForeignKey(nameof(StreamSessionId))]
     public StreamSession? StreamSession { get; set; }
+
+    [ForeignKey(nameof(MonitoredChannelId))]
+    public MonitoredChannel? MonitoredChannel { get; set; }
+
+    [ForeignKey(nameof(AudienceMemberId))]
+    public AudienceMember? AudienceMember { get; set; }
 }

@@ -9,6 +9,11 @@ Accept: application/json
 
 ###
 
+GET {{ObsStreamingOpener.Api_HostAddress}}/api/channels
+Accept: application/json
+
+###
+
 GET {{ObsStreamingOpener.Api_HostAddress}}/api/events/recent?limit=10
 Accept: application/json
 
@@ -24,4 +29,16 @@ Content-Type: application/json
   "message": "Great stream",
   "amount": 25,
   "currency": "PLN"
+}
+
+###
+
+POST {{ObsStreamingOpener.Api_HostAddress}}/api/dev/events/audience/sample
+Content-Type: application/json
+
+{
+  "provider": "Custom",
+  "externalAudienceId": "demo-1",
+  "displayName": "Demo audience",
+  "relationshipKind": "Free"
 }

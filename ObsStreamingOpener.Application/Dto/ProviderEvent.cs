@@ -3,7 +3,9 @@ using ObsStreamingOpener.Domain;
 namespace ObsStreamingOpener.Application.Dto;
 
 public sealed record ProviderEvent(
-    Guid StreamSessionId,
+    Guid MonitoredChannelId,
+    Guid? StreamSessionId,
+    Guid? AudienceMemberId,
     ProviderKind Provider,
     StreamEventType EventType,
     string? ExternalEventId,

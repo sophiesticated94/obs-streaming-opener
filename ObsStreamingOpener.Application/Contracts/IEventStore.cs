@@ -6,9 +6,9 @@ namespace ObsStreamingOpener.Application.Contracts;
 
 public interface IEventStore
 {
-    Task<bool> EventExistsAsync(Guid streamSessionId, ProviderKind provider, string externalEventId, CancellationToken cancellationToken = default);
+    Task<bool> EventExistsAsync(Guid monitoredChannelId, ProviderKind provider, string externalEventId, CancellationToken cancellationToken = default);
 
     Task AddEventAsync(StreamEvent streamEvent, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<RecentEventDto>> GetRecentEventsAsync(ProviderKind? provider, StreamEventType? eventType, int limit, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<RecentEventDto>> GetRecentEventsAsync(Guid? monitoredChannelId, ProviderKind? provider, StreamEventType? eventType, int limit, CancellationToken cancellationToken = default);
 }

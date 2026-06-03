@@ -4,9 +4,9 @@ namespace ObsStreamingOpener.Application.Contracts;
 
 public interface IStatsQueryService
 {
-    Task<CurrentStatsDto> GetCurrentStatsAsync(CancellationToken cancellationToken = default);
+    Task<CurrentStatsDto> GetCurrentStatsAsync(Guid? monitoredChannelId = null, CancellationToken cancellationToken = default);
 
-    Task<StatsSummaryDto> GetSummaryAsync(DateTimeOffset? from, DateTimeOffset? to, CancellationToken cancellationToken = default);
+    Task<StatsSummaryDto> GetSummaryAsync(Guid? monitoredChannelId, DateTimeOffset? from, DateTimeOffset? to, CancellationToken cancellationToken = default);
 
-    Task<WidgetDataDto> GetWidgetDataAsync(string widgetKey, CancellationToken cancellationToken = default);
+    Task<WidgetDataDto> GetWidgetDataAsync(string widgetKey, Guid? monitoredChannelId = null, CancellationToken cancellationToken = default);
 }

@@ -9,7 +9,7 @@ public sealed class ProviderConnection
     public Guid Id { get; set; } = Guid.NewGuid();
 
     [Required]
-    public Guid StreamSessionId { get; set; }
+    public Guid MonitoredChannelId { get; set; }
 
     [Required]
     public ProviderKind Provider { get; set; }
@@ -28,7 +28,7 @@ public sealed class ProviderConnection
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public StreamSession? StreamSession { get; set; }
+    public MonitoredChannel? MonitoredChannel { get; set; }
 
     public ICollection<ProviderCursor> Cursors { get; set; } = new List<ProviderCursor>();
 }

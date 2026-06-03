@@ -8,8 +8,17 @@ public sealed class StreamSession
     public Guid Id { get; set; } = Guid.NewGuid();
 
     [Required]
+    public Guid MonitoredChannelId { get; set; }
+
+    [Required]
     [MaxLength(256)]
     public string Title { get; set; } = "Current stream";
+
+    [MaxLength(256)]
+    public string? ExternalStreamId { get; set; }
+
+    [MaxLength(256)]
+    public string? ExternalLiveChatId { get; set; }
 
     public bool IsActive { get; set; } = true;
 
@@ -17,7 +26,7 @@ public sealed class StreamSession
 
     public DateTimeOffset? EndedAt { get; set; }
 
-    public ICollection<ProviderConnection> ProviderConnections { get; set; } = new List<ProviderConnection>();
+    public MonitoredChannel? MonitoredChannel { get; set; }
 
     public ICollection<StreamEvent> Events { get; set; } = new List<StreamEvent>();
 

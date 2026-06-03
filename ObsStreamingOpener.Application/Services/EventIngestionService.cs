@@ -11,7 +11,7 @@ public sealed class EventIngestionService(IEventStore eventStore, IClock clock) 
         if (!string.IsNullOrWhiteSpace(providerEvent.ExternalEventId))
         {
             var exists = await eventStore.EventExistsAsync(
-                providerEvent.StreamSessionId,
+                providerEvent.MonitoredChannelId,
                 providerEvent.Provider,
                 providerEvent.ExternalEventId,
                 cancellationToken);
@@ -25,7 +25,9 @@ public sealed class EventIngestionService(IEventStore eventStore, IClock clock) 
         var streamEvent = new StreamEvent
         {
             Id = Guid.NewGuid(),
+            MonitoredChannelId = providerEvent.MonitoredChannelId,
             StreamSessionId = providerEvent.StreamSessionId,
+            AudienceMemberId = providerEvent.AudienceMemberId,
             Provider = providerEvent.Provider,
             EventType = providerEvent.EventType,
             ExternalEventId = providerEvent.ExternalEventId,

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OBS Audience</title>
+  <link rel="stylesheet" href="/widgets/widgets.css">
+</head>
+<body>
+  <main class="widget">
+    <section id="audience" class="event-list"></section>
+  </main>
+  <script type="module">
+    import { applyTheme, getJson, query } from "/widgets/shared.js";
+
+    applyTheme();
+    const interval = Number(query("interval", "2000"));
+    const channelId = query("channelId", "");
+
+    async function getChannelId() {
+      if (channelId) {
+        return channelId;
+      }
+
+      const channels = await getJson("/api/channels");
+      return channels[0]?.id;
+    }
+
+    function renderRelationship(period) {
+      const kind = period.relationshipKind === "Paid" ? "Paid audience" : "Audience";
+      return `<article class="event">
+        <strong>${period.audienceDisplayName ?? "Audience"}</strong>
+        <p>${kind} relationship started</p>
+        <span class="muted">${new Date(period.startedAt).toLocaleTimeString()}</span>
+      </article>`;
+    }
+
+    async function refresh() {
+      const resolvedChannelId = await getChannelId();
+      if (!resolvedChannelId) {
+        document.getElementById("audience").innerHTML = `<article class="event"><strong>Ready</strong><p>No channel configured</p><span class="muted"></span></article>`;
+        return;
+      }
+
+      const data = await getJson(`/api/channels/${resolvedChannelId}/audience/recent?limit=10`);
+      document.getElementById("audience").innerHTML = data.length
+        ? data.map(renderRelationship).join("")
+        : `<article class="event"><strong>Ready</strong><p>Waiting for audience relationships</p><span class="muted"></span></article>`;
+    }
+
+    refresh().catch(console.error);
+    setInterval(() => refresh().catch(console.error), interval);
+  </script>
+</body>
+</html>

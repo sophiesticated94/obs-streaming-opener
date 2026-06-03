@@ -8,6 +8,6 @@ namespace ObsStreamingOpener.Api.Controllers;
 public sealed class WidgetsController(IStatsQueryService statsQueryService) : ControllerBase
 {
     [HttpGet("{widgetKey}/data")]
-    public async Task<IActionResult> GetData(string widgetKey, CancellationToken cancellationToken)
-        => Ok(await statsQueryService.GetWidgetDataAsync(widgetKey, cancellationToken));
+    public async Task<IActionResult> GetData(string widgetKey, [FromQuery] Guid? channelId, CancellationToken cancellationToken)
+        => Ok(await statsQueryService.GetWidgetDataAsync(widgetKey, channelId, cancellationToken));
 }

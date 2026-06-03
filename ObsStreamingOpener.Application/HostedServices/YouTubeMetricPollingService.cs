@@ -46,12 +46,13 @@ public sealed class YouTubeMetricPollingService(
     private async Task PollYouTubeMetricsAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
+        var channelStore = scope.ServiceProvider.GetRequiredService<IChannelStore>();
         var sessionStore = scope.ServiceProvider.GetRequiredService<IStreamSessionStore>();
         var statsStore = scope.ServiceProvider.GetRequiredService<IStatsStore>();
         var client = scope.ServiceProvider.GetRequiredService<IYouTubeApiClient>();
         var clock = scope.ServiceProvider.GetRequiredService<IClock>();
 
-        var connections = await sessionStore.GetEnabledConnectionsAsync(ProviderKind.YouTube, cancellationToken);
+        var connections = await channelStore.GetEnabledConnectionsAsync(ProviderKind.YouTube, cancellationToken);
         foreach (var connection in connections.Where(x => !string.IsNullOrWhiteSpace(x.ExternalStreamId)))
         {
             var stats = await client.GetViewerStatsAsync(connection.ExternalStreamId!, cancellationToken);
@@ -64,9 +65,12 @@ public sealed class YouTubeMetricPollingService(
             {
                 await statsStore.AddMetricSnapshotAsync(new MetricSnapshot
                 {
-                    StreamSessionId = connection.StreamSessionId,
+                    MonitoredChannelId = connection.MonitoredChannelId,
+                    StreamSessionId = (await sessionStore.GetCurrentSessionAsync(connection.MonitoredChannelId, cancellationToken))?.Id,
+                    ProviderConnectionId = connection.Id,
                     Provider = ProviderKind.YouTube,
                     Metric = MetricKind.ConcurrentViewers,
+                    SnapshotReason = SnapshotReason.ScheduledPoll,
                     Value = stats.ConcurrentViewers.Value,
                     Unit = "viewers",
                     CapturedAt = clock.UtcNow,
@@ -78,9 +82,12 @@ public sealed class YouTubeMetricPollingService(
             {
                 await statsStore.AddMetricSnapshotAsync(new MetricSnapshot
                 {
-                    StreamSessionId = connection.StreamSessionId,
+                    MonitoredChannelId = connection.MonitoredChannelId,
+                    StreamSessionId = (await sessionStore.GetCurrentSessionAsync(connection.MonitoredChannelId, cancellationToken))?.Id,
+                    ProviderConnectionId = connection.Id,
                     Provider = ProviderKind.YouTube,
                     Metric = MetricKind.Likes,
+                    SnapshotReason = SnapshotReason.ScheduledPoll,
                     Value = stats.Likes.Value,
                     Unit = "likes",
                     CapturedAt = clock.UtcNow,
