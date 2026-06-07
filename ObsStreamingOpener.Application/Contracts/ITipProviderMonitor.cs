@@ -1,5 +1,5 @@
 namespace ObsStreamingOpener.Application.Contracts;
 
-public interface ITipProviderMonitor : IProviderMonitor
+public interface ITipProviderMonitor : IAccountProviderMonitor
 {
 }

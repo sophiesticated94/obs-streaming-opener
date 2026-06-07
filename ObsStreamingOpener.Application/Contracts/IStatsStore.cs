@@ -12,7 +12,13 @@ public interface IStatsStore
 
     Task<MetricSnapshot?> GetLatestMetricAsync(Guid monitoredChannelId, MetricKind metric, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<MetricSnapshot>> GetMetricsAsync(Guid monitoredChannelId, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<MetricSnapshot>> GetMetricsAsync(
+        Guid monitoredChannelId,
+        DateTimeOffset from,
+        DateTimeOffset to,
+        Guid? providerResourceId = null,
+        Guid? streamSessionId = null,
+        CancellationToken cancellationToken = default);
 
     Task<StreamSessionDto?> GetCurrentStreamAsync(Guid monitoredChannelId, CancellationToken cancellationToken = default);
 }

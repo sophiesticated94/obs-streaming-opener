@@ -6,4 +6,7 @@ public sealed record WidgetDataDto(
     CurrentStatsDto CurrentStats,
     StatsSummaryDto Summary,
     IReadOnlyList<RecentEventDto> RecentEvents,
-    DateTimeOffset GeneratedAt);
+    DateTimeOffset GeneratedAt,
+    IReadOnlyList<ProviderResourceDto>? RecentContent = null,
+    IReadOnlyList<ProviderResourceDto>? UpcomingContent = null,
+    IReadOnlyList<RecentEventDto>? RecentComments = null);

@@ -16,6 +16,8 @@ public sealed class StreamEvent
 
     public Guid? AudienceMemberId { get; set; }
 
+    public Guid? ProviderResourceId { get; set; }
+
     [Required]
     public ProviderKind Provider { get; set; }
 
@@ -24,6 +26,13 @@ public sealed class StreamEvent
 
     [MaxLength(256)]
     public string? ExternalEventId { get; set; }
+
+    [Required]
+    [MaxLength(512)]
+    public string IdentityKey { get; set; } = string.Empty;
+
+    [MaxLength(128)]
+    public string? PayloadHash { get; set; }
 
     [MaxLength(256)]
     public string? ActorName { get; set; }
@@ -37,10 +46,10 @@ public sealed class StreamEvent
     [MaxLength(2048)]
     public string? Message { get; set; }
 
-    public decimal? Amount { get; set; }
+    public decimal? Value { get; set; }
 
-    [MaxLength(8)]
-    public string? Currency { get; set; }
+    [MaxLength(32)]
+    public string? Unit { get; set; }
 
     [Required]
     public DateTimeOffset OccurredAt { get; set; }
@@ -48,8 +57,14 @@ public sealed class StreamEvent
     [Required]
     public DateTimeOffset StoredAt { get; set; } = DateTimeOffset.UtcNow;
 
+    [Required]
+    public DateTimeOffset LastSeenAt { get; set; } = DateTimeOffset.UtcNow;
+
     [Column(TypeName = "TEXT")]
     public string? RawPayloadJson { get; set; }
+
+    [Column(TypeName = "TEXT")]
+    public string? ContextJson { get; set; }
 
     [ForeignKey(nameof(StreamSessionId))]
     public StreamSession? StreamSession { get; set; }
@@ -59,4 +74,11 @@ public sealed class StreamEvent
 
     [ForeignKey(nameof(AudienceMemberId))]
     public AudienceMember? AudienceMember { get; set; }
+
+    [ForeignKey(nameof(ProviderResourceId))]
+    public ProviderResource? ProviderResource { get; set; }
+
+    public ICollection<StreamAlert> Alerts { get; set; } = new List<StreamAlert>();
+
+    public Tip? Tip { get; set; }
 }

@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using ObsStreamingOpener.Application.Contracts;
 using ObsStreamingOpener.Application.Dto;
 using ObsStreamingOpener.Application.Services;
 using ObsStreamingOpener.Database;
 using ObsStreamingOpener.Database.Model;
 using ObsStreamingOpener.Domain;
+using ObsStreamingOpener.Infrastructure.YouTube;
 
 namespace ObsStreamingOpener.Tests;
 
@@ -19,6 +21,7 @@ public sealed class DatabaseRepositoryTests
 
         var result = await ingestion.IngestAsync(new ProviderEvent(
             channel.Id,
+            null,
             null,
             null,
             ProviderKind.YouTube,
@@ -53,6 +56,7 @@ public sealed class DatabaseRepositoryTests
             channel.Id,
             session.Id,
             null,
+            null,
             ProviderKind.YouTube,
             StreamEventType.ChatMessage,
             "yt-message-stream-1",
@@ -70,6 +74,87 @@ public sealed class DatabaseRepositoryTests
     }
 
     [Fact]
+    public async Task IngestAsync_StoresTipInDedicatedTipTableAndEventUsesGenericValue()
+    {
+        await using var fixture = await RepositoryFixture.CreateAsync();
+        var channel = await fixture.Repository.GetDefaultChannelEntityAsync();
+        var session = await fixture.Repository.GetOrCreateCurrentSessionAsync(channel.Id);
+        var ingestion = new EventIngestionService(fixture.Repository, fixture.Clock);
+
+        var result = await ingestion.IngestAsync(new ProviderEvent(
+            channel.Id,
+            session.Id,
+            null,
+            null,
+            ProviderKind.Custom,
+            StreamEventType.Tip,
+            "tip-table-1",
+            "Tipper",
+            "tipper-1",
+            "Tip",
+            "Keep going",
+            42,
+            "PLN",
+            fixture.Clock.UtcNow,
+            "{}"));
+
+        var streamEvent = await fixture.DbContext.StreamEvents.SingleAsync(x => x.Id == result.EventId);
+        var tip = await fixture.DbContext.Tips.SingleAsync(x => x.StreamEventId == streamEvent.Id);
+
+        Assert.Equal(42, streamEvent.Value);
+        Assert.Equal("PLN", streamEvent.Unit);
+        Assert.Equal(42, tip.Amount);
+        Assert.Equal("PLN", tip.Currency);
+        Assert.Equal(streamEvent.Id, tip.StreamEventId);
+        Assert.Equal(session.Id, tip.StreamSessionId);
+    }
+
+    [Fact]
+    public async Task YouTubeLiveChatMonitor_StoresSuperChatAsTipForCurrentStream()
+    {
+        await using var fixture = await RepositoryFixture.CreateAsync();
+        var channel = await fixture.Repository.GetDefaultChannelEntityAsync();
+        var session = await fixture.Repository.GetOrCreateCurrentSessionAsync(channel.Id);
+        fixture.DbContext.ProviderConnections.Add(new ProviderConnection
+        {
+            MonitoredChannelId = channel.Id,
+            Provider = ProviderKind.YouTube,
+            ExternalChannelId = channel.ExternalChannelId,
+            ExternalStreamId = "video-1",
+            IsEnabled = true
+        });
+        await fixture.DbContext.SaveChangesAsync();
+
+        var ingestion = new EventIngestionService(fixture.Repository, fixture.Clock);
+        var monitor = new YouTubeLiveChatMonitor(
+            fixture.Repository,
+            fixture.Repository,
+            fixture.Repository,
+            ingestion,
+            new AudienceIngestionService(fixture.Repository, ingestion, fixture.Clock),
+            fixture.Repository,
+            new ProviderEventIdentityService(),
+            new FakeLiveChatYouTubeApiClient(),
+            new FakeYouTubeCredentialResolver(),
+            NullLogger<YouTubeLiveChatMonitor>.Instance);
+
+        await monitor.PollAsync();
+
+        var streamEvent = await fixture.DbContext.StreamEvents.SingleAsync(x => x.EventType == StreamEventType.Tip);
+        var tip = await fixture.DbContext.Tips.SingleAsync(x => x.StreamEventId == streamEvent.Id);
+        var message = await fixture.DbContext.ProviderMessages.SingleAsync(x => x.ExternalMessageId == "super-chat-1");
+        var tipTotal = await fixture.Repository.GetLatestMetricAsync(channel.Id, MetricKind.TipTotal);
+
+        Assert.Equal(session.Id, streamEvent.StreamSessionId);
+        Assert.Equal(12.34m, streamEvent.Value);
+        Assert.Equal("PLN", streamEvent.Unit);
+        Assert.Equal(12.34m, tip.Amount);
+        Assert.Equal("PLN", tip.Currency);
+        Assert.Equal(12.34m, message.Amount);
+        Assert.Equal(12.34m, tipTotal!.Value);
+    }
+
+    [Fact]
     public async Task IngestAsync_SkipsDuplicateProviderEventWithinChannel()
     {
         await using var fixture = await RepositoryFixture.CreateAsync();
@@ -77,6 +162,7 @@ public sealed class DatabaseRepositoryTests
         var ingestion = new EventIngestionService(fixture.Repository, fixture.Clock);
         var providerEvent = new ProviderEvent(
             channel.Id,
+            null,
             null,
             null,
             ProviderKind.YouTube,
@@ -148,7 +234,7 @@ public sealed class DatabaseRepositoryTests
             });
         await fixture.DbContext.SaveChangesAsync();
 
-        var service = new StatsQueryService(fixture.Repository, fixture.Repository, fixture.Repository, fixture.Clock);
+        var service = new StatsQueryService(fixture.Repository, fixture.Repository, fixture.Repository, fixture.Repository, fixture.Clock);
         var stats = await service.GetCurrentStatsAsync(channel.Id);
 
         Assert.Equal(channel.Id, stats.MonitoredChannelId);
@@ -273,6 +359,225 @@ public sealed class DatabaseRepositoryTests
         Assert.Equal(2, (await fixture.Repository.GetRelationshipHistoryAsync(channel.Id, first.AudienceMemberId)).Count);
     }
 
+    [Fact]
+    public async Task UpsertEventAsync_UpdatesExistingEventByIdentityKeyInsteadOfDuplicating()
+    {
+        await using var fixture = await RepositoryFixture.CreateAsync();
+        var channel = await fixture.Repository.GetDefaultChannelEntityAsync();
+        var identityKey = "YouTube:ContentPublished:native:youtube-content:video-1";
+
+        await fixture.Repository.UpsertEventAsync(new StreamEvent
+        {
+            MonitoredChannelId = channel.Id,
+            Provider = ProviderKind.YouTube,
+            EventType = StreamEventType.ContentPublished,
+            ExternalEventId = "youtube-content:video-1",
+            IdentityKey = identityKey,
+            PayloadHash = "one",
+            Title = "Old title",
+            OccurredAt = fixture.Clock.UtcNow,
+            StoredAt = fixture.Clock.UtcNow,
+            LastSeenAt = fixture.Clock.UtcNow
+        });
+
+        var result = await fixture.Repository.UpsertEventAsync(new StreamEvent
+        {
+            MonitoredChannelId = channel.Id,
+            Provider = ProviderKind.YouTube,
+            EventType = StreamEventType.ContentPublished,
+            ExternalEventId = "youtube-content:video-1",
+            IdentityKey = identityKey,
+            PayloadHash = "two",
+            Title = "New title",
+            OccurredAt = fixture.Clock.UtcNow.AddMinutes(1),
+            StoredAt = fixture.Clock.UtcNow,
+            LastSeenAt = fixture.Clock.UtcNow
+        });
+
+        var stored = Assert.Single(await fixture.Repository.GetRecentEventsAsync(channel.Id, null, null, 10));
+        Assert.True(result.Stored);
+        Assert.False(result.Duplicate);
+        Assert.Equal("New title", stored.Title);
+    }
+
+    [Fact]
+    public async Task UpsertMessageAsync_StoresAndUpdatesProviderMessage()
+    {
+        await using var fixture = await RepositoryFixture.CreateAsync();
+        var channel = await fixture.Repository.GetDefaultChannelEntityAsync();
+        var message = new ProviderMessageUpsert(
+            channel.Id,
+            null,
+            null,
+            ProviderKind.YouTube,
+            MessageSource.LiveChat,
+            "chat-1",
+            "YouTube:LiveChat:native:chat-1",
+            "author-1",
+            "Viewer",
+            null,
+            "Hello",
+            fixture.Clock.UtcNow,
+            null,
+            false,
+            false,
+            false,
+            false,
+            null,
+            null,
+            "{}");
+
+        await fixture.Repository.UpsertMessageAsync(message);
+        await fixture.Repository.UpsertMessageAsync(message with { MessageText = "Updated" });
+
+        var stored = Assert.Single(await fixture.Repository.GetRecentMessagesAsync(channel.Id, MessageSource.LiveChat, 10));
+        Assert.Equal("Updated", stored.MessageText);
+        Assert.Equal("Viewer", stored.AuthorDisplayName);
+    }
+
+    [Fact]
+    public async Task AlertService_CreatesAlertForStreamEventAndSkipsOutsideStreamEvent()
+    {
+        await using var fixture = await RepositoryFixture.CreateAsync();
+        var channel = await fixture.Repository.GetDefaultChannelEntityAsync();
+        var session = await fixture.Repository.GetOrCreateCurrentSessionAsync(channel.Id);
+        var alertService = new AlertService(fixture.Repository, fixture.Repository, fixture.Repository, fixture.Clock);
+        var ingestion = new EventIngestionService(
+            fixture.Repository,
+            fixture.Clock,
+            notificationHandlers: [new AlertNotificationHandler(alertService)]);
+
+        await ingestion.IngestAsync(new ProviderEvent(
+            channel.Id,
+            session.Id,
+            null,
+            null,
+            ProviderKind.Custom,
+            StreamEventType.Tip,
+            "tip-with-session",
+            "Tipper",
+            null,
+            "Tip",
+            "Nice stream",
+            20,
+            "PLN",
+            fixture.Clock.UtcNow,
+            "{}"));
+        await ingestion.IngestAsync(new ProviderEvent(
+            channel.Id,
+            null,
+            null,
+            null,
+            ProviderKind.Custom,
+            StreamEventType.Tip,
+            "tip-outside-session",
+            "Tipper",
+            null,
+            "Tip",
+            "No stream",
+            20,
+            "PLN",
+            fixture.Clock.UtcNow,
+            "{}"));
+
+        var alert = Assert.Single(await fixture.Repository.GetRecentAlertsAsync(channel.Id, session.Id, 10));
+        Assert.Equal(session.Id, alert.StreamSessionId);
+        Assert.False(alert.IsSystemAlert);
+        Assert.NotNull(alert.StreamEventId);
+    }
+
+    [Fact]
+    public async Task AlertService_CreatesManualSystemAlertForCurrentSession()
+    {
+        await using var fixture = await RepositoryFixture.CreateAsync();
+        var channel = await fixture.Repository.GetDefaultChannelEntityAsync();
+        var session = await fixture.Repository.GetOrCreateCurrentSessionAsync(channel.Id);
+        var alertService = new AlertService(fixture.Repository, fixture.Repository, fixture.Repository, fixture.Clock);
+
+        var alert = await alertService.CreateManualAlertAsync(channel.Id, new ManualAlertRequest(
+            null,
+            "Manual",
+            "Preview",
+            "fireworks",
+            7,
+            null,
+            null));
+
+        Assert.Equal(session.Id, alert.StreamSessionId);
+        Assert.True(alert.IsSystemAlert);
+        Assert.Null(alert.StreamEventId);
+    }
+
+    [Fact]
+    public async Task UpsertResource_MergesVideoAndLiveBroadcastWithPatchHistory()
+    {
+        await using var fixture = await RepositoryFixture.CreateAsync();
+        var channel = await fixture.Repository.GetDefaultChannelEntityAsync();
+
+        var video = await fixture.Repository.UpsertResourceAsync(new ProviderResourceUpsert(
+            channel.Id,
+            ProviderKind.YouTube,
+            ProviderResourceKind.Video,
+            "video-123",
+            "First title",
+            null,
+            "https://youtube.test/watch?v=video-123",
+            "public",
+            fixture.Clock.UtcNow.AddDays(-1),
+            null,
+            null,
+            null,
+            "{}"));
+
+        var broadcast = await fixture.Repository.UpsertResourceAsync(new ProviderResourceUpsert(
+            channel.Id,
+            ProviderKind.YouTube,
+            ProviderResourceKind.LiveBroadcast,
+            "video-123",
+            "Updated title",
+            null,
+            "https://youtube.test/watch?v=video-123",
+            "complete",
+            fixture.Clock.UtcNow.AddDays(-1),
+            fixture.Clock.UtcNow.AddHours(-2),
+            fixture.Clock.UtcNow.AddHours(-1),
+            fixture.Clock.UtcNow,
+            "{}"));
+
+        Assert.Equal(video.Id, broadcast.Id);
+        Assert.Equal(ProviderResourceKind.LiveBroadcast, broadcast.ResourceKind);
+        Assert.Contains(ProviderResourceKind.Video, broadcast.ObservedKinds);
+        Assert.Contains(ProviderResourceKind.LiveBroadcast, broadcast.ObservedKinds);
+        Assert.Contains(broadcast.PatchHistory.SelectMany(x => x.Fields), x => x.Field == nameof(ProviderResource.Title));
+        Assert.Single(await fixture.DbContext.ProviderResources.Where(x => x.ExternalResourceId == "video-123").ToListAsync());
+    }
+
+    [Fact]
+    public async Task UpsertResource_UnchangedResourceDoesNotAppendPatch()
+    {
+        await using var fixture = await RepositoryFixture.CreateAsync();
+        var channel = await fixture.Repository.GetDefaultChannelEntityAsync();
+        var upsert = new ProviderResourceUpsert(
+            channel.Id,
+            ProviderKind.YouTube,
+            ProviderResourceKind.Video,
+            "stable-video",
+            "Stable title",
+            null,
+            null,
+            "public",
+            fixture.Clock.UtcNow,
+            null,
+            null,
+            null,
+            "{}");
+
+        var first = await fixture.Repository.UpsertResourceAsync(upsert);
+        var second = await fixture.Repository.UpsertResourceAsync(upsert);
+
+        Assert.Equal(first.PatchHistory.Count, second.PatchHistory.Count);
+    }
+
     private sealed class RepositoryFixture : IAsyncDisposable
     {
         private RepositoryFixture(StreamingOpenerDbContext dbContext, TestClock clock)
@@ -307,5 +612,59 @@ public sealed class DatabaseRepositoryTests
     private sealed class TestClock : IClock
     {
         public DateTimeOffset UtcNow { get; } = new(2026, 6, 3, 12, 0, 0, TimeSpan.Zero);
+    }
+
+    private sealed class FakeLiveChatYouTubeApiClient : IYouTubeApiClient
+    {
+        public Task<YouTubeViewerStats?> GetViewerStatsAsync(string videoId, string? accessToken = null, CancellationToken cancellationToken = default)
+            => Task.FromResult<YouTubeViewerStats?>(null);
+
+        public Task<YouTubeChatPollResult> GetLiveChatMessagesAsync(string liveChatId, string? pageToken, string? accessToken = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(new YouTubeChatPollResult(
+                [
+                    new YouTubeChatMessage(
+                        "super-chat-1",
+                        "superChatEvent",
+                        "Supporter",
+                        "supporter-channel",
+                        "https://example.test/avatar.png",
+                        "Great stream",
+                        new DateTimeOffset(2026, 6, 3, 12, 1, 0, TimeSpan.Zero),
+                        "{}",
+                        Amount: 12.34m,
+                        Currency: "PLN",
+                        AmountDisplayString: "12.34 PLN",
+                        UserComment: "Great stream",
+                        Tier: 2)
+                ],
+                "next-token",
+                TimeSpan.FromSeconds(10)));
+
+        public Task<IReadOnlyList<YouTubeContentItem>> GetVideosAsync(IReadOnlyList<string> videoIds, string accessToken, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<YouTubeContentItem>>(
+            [
+                new YouTubeContentItem(
+                    "video-1",
+                    ProviderResourceKind.Video,
+                    "Live",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "{}",
+                    LiveChatId: "live-chat-1")
+            ]);
+    }
+
+    private sealed class FakeYouTubeCredentialResolver : IYouTubeCredentialResolver
+    {
+        public Task<ProviderAccessTokenDto?> ResolveForChannelAsync(Guid monitoredChannelId, CancellationToken cancellationToken = default)
+            => Task.FromResult<ProviderAccessTokenDto?>(new ProviderAccessTokenDto(Guid.NewGuid(), "access-token"));
     }
 }

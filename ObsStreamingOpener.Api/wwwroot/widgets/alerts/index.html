@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OBS Alerts</title>
+  <link rel="stylesheet" href="./alerts.css">
+</head>
+<body>
+  <main id="root" class="alert-stage">
+    <section id="alert" class="alert-card hidden">
+      <div class="sparkles" aria-hidden="true"></div>
+      <p id="eyebrow" class="eyebrow">Stream alert</p>
+      <h1 id="title"></h1>
+      <p id="message" class="message"></p>
+      <p id="meta" class="meta"></p>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+  <script type="module" src="./alerts.js"></script>
+</body>
+</html>

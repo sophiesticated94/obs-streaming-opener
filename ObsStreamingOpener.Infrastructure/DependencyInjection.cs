@@ -2,6 +2,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ObsStreamingOpener.Application.Contracts;
 using ObsStreamingOpener.Domain;
+using ObsStreamingOpener.Infrastructure.Http;
+using ObsStreamingOpener.Infrastructure.Browser;
 using ObsStreamingOpener.Infrastructure.Options;
 using ObsStreamingOpener.Infrastructure.Providers;
 using ObsStreamingOpener.Infrastructure.Time;
@@ -14,21 +16,27 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<YouTubeOptions>(configuration.GetSection("YouTube"));
+        services.Configure<BrowserAutomationOptions>(configuration.GetSection("BrowserAutomation"));
+        services.Configure<SupportProviderOptions>(ProviderKind.Tipply.ToString(), configuration.GetSection("SupportProviders:Tipply"));
+        services.Configure<SupportProviderOptions>(ProviderKind.Patronite.ToString(), configuration.GetSection("SupportProviders:Patronite"));
+        services.Configure<SupportProviderOptions>(ProviderKind.Zrzutka.ToString(), configuration.GetSection("SupportProviders:Zrzutka"));
+        services.AddMemoryCache();
         services.AddSingleton<IClock, SystemClock>();
-        services.AddHttpClient<IYouTubeApiClient, YouTubeApiClient>((serviceProvider, client) =>
-        {
-            var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<YouTubeOptions>>().Value;
-            client.BaseAddress = new Uri(options.BaseUrl);
-        });
+        services.AddScoped<ILoginStateService, LoginStateService>();
+        services.AddScoped<IBrowserSessionFactory, BrowserSessionFactory>();
+        services.AddHttpClient<IExternalHttpClient, ExternalHttpClient>();
+        services.AddScoped<IYouTubeApiClient, YouTubeApiClient>();
+        services.AddScoped<IYouTubeOAuthClient, YouTubeOAuthClient>();
+        services.AddScoped<IStreamProviderDataProvider, YouTubeStreamProviderDataProvider>();
+        services.Decorate<IStreamProviderDataProvider, CachedStreamProviderDataProvider>();
 
         services.AddScoped<YouTubeLiveChatMonitor>();
         services.AddScoped<IStreamingProviderMonitor>(sp => sp.GetRequiredService<YouTubeLiveChatMonitor>());
         services.AddScoped<IProviderMonitor>(sp => sp.GetRequiredService<YouTubeLiveChatMonitor>());
 
-        services.AddScoped<ITipProviderMonitor>(sp => new StubTipProviderMonitor(ProviderKind.Tipply.ToString(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<StubTipProviderMonitor>>()));
-        services.AddScoped<ITipProviderMonitor>(sp => new StubTipProviderMonitor(ProviderKind.Patronite.ToString(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<StubTipProviderMonitor>>()));
-        services.AddScoped<IProviderMonitor>(sp => sp.GetServices<ITipProviderMonitor>().First(x => x.Name == ProviderKind.Tipply.ToString()));
-        services.AddScoped<IProviderMonitor>(sp => sp.GetServices<ITipProviderMonitor>().First(x => x.Name == ProviderKind.Patronite.ToString()));
+        services.AddScoped<ISupportProviderAdapter>(sp => new EmptySupportProviderAdapter(ProviderKind.Tipply, sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<SupportProviderOptions>>()));
+        services.AddScoped<ISupportProviderAdapter>(sp => new EmptySupportProviderAdapter(ProviderKind.Patronite, sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<SupportProviderOptions>>()));
+        services.AddScoped<ISupportProviderAdapter>(sp => new EmptySupportProviderAdapter(ProviderKind.Zrzutka, sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<SupportProviderOptions>>()));
 
         return services;
     }

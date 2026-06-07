@@ -17,5 +17,5 @@ public sealed class StatsController(IStatsQueryService statsQueryService) : Cont
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
         CancellationToken cancellationToken)
-        => Ok(await statsQueryService.GetSummaryAsync(channelId, from, to, cancellationToken));
+        => Ok(await statsQueryService.GetSummaryAsync(channelId, from, to, cancellationToken: cancellationToken));
 }

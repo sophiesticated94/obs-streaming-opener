@@ -7,6 +7,7 @@ public sealed record RecentEventDto(
     Guid MonitoredChannelId,
     Guid? StreamSessionId,
     Guid? AudienceMemberId,
+    Guid? ProviderResourceId,
     ProviderKind Provider,
     StreamEventType EventType,
     string? ActorName,

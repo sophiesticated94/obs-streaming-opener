@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OBS Comment Explorer</title>
+  <link rel="stylesheet" href="./comment-explorer.css">
+</head>
+<body>
+  <main class="comment-explorer">
+    <header class="explorer-header">
+      <div>
+        <span class="eyebrow">Live comments</span>
+        <h1>Comment Explorer</h1>
+      </div>
+      <span id="status" class="status">syncing</span>
+    </header>
+    <section id="messages" class="message-list" aria-live="polite"></section>
+  </main>
+  <script type="module" src="./comment-explorer.js"></script>
+</body>
+</html>

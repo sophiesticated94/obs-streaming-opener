@@ -16,4 +16,6 @@ public sealed class MonitoredAccount
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public ICollection<MonitoredChannel> Channels { get; set; } = new List<MonitoredChannel>();
+
+    public ICollection<ProviderCredential> ProviderCredentials { get; set; } = new List<ProviderCredential>();
 }

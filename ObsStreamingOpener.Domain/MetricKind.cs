@@ -8,5 +8,9 @@ public enum MetricKind
     TipTotal = 4,
     AudienceMemberCount = 5,
     PaidAudienceMemberCount = 6,
-    TotalViews = 7
+    TotalViews = 7,
+    VideoCount = 8,
+    PublishedVideoCount = 9,
+    UpcomingStreamCount = 10,
+    CommentCount = 11
 }

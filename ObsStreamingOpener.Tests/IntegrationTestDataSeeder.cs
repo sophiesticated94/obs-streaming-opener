@@ -76,9 +76,12 @@ public sealed class IntegrationTestDataSeeder(StreamingOpenerDbContext dbContext
         var session = new StreamSession
         {
             MonitoredChannelId = channel.Id,
+            Provider = channel.Provider,
+            ExternalSessionId = $"test-session-{Guid.NewGuid():N}",
             Title = title,
             IsActive = isActive,
-            StartedAt = startedAt ?? clock.UtcNow
+            StartedAt = startedAt ?? clock.UtcNow,
+            LastSyncedAt = clock.UtcNow
         };
 
         dbContext.StreamSessions.Add(session);
@@ -107,14 +110,19 @@ public sealed class IntegrationTestDataSeeder(StreamingOpenerDbContext dbContext
             Provider = provider,
             EventType = eventType,
             ExternalEventId = externalEventId,
+            IdentityKey = $"{provider}:{eventType}:{externalEventId ?? Guid.NewGuid().ToString("N")}",
+            PayloadHash = "seed",
             ActorName = actorName,
             Title = eventType.ToString(),
             Message = message,
-            Amount = amount,
-            Currency = currency,
+            Value = amount,
+            Unit = currency,
             OccurredAt = occurredAt ?? clock.UtcNow,
             StoredAt = clock.UtcNow,
-            RawPayloadJson = "{}"
+            RawPayloadJson = "{}",
+            ContextJson = amount.HasValue || !string.IsNullOrWhiteSpace(currency)
+                ? $$"""{"providerAmount":{{amount?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null"}},"providerCurrency":"{{currency}}"}"""
+                : null
         };
 
         dbContext.StreamEvents.Add(streamEvent);
@@ -148,6 +156,65 @@ public sealed class IntegrationTestDataSeeder(StreamingOpenerDbContext dbContext
         dbContext.MetricSnapshots.Add(snapshot);
         await dbContext.SaveChangesAsync();
         return snapshot;
+    }
+
+    public async Task<ProviderResource> CreateProviderResourceAsync(
+        MonitoredChannel channel,
+        ProviderResourceKind resourceKind,
+        string externalResourceId,
+        string? title = null,
+        ProviderKind provider = ProviderKind.YouTube,
+        DateTimeOffset? publishedAt = null,
+        DateTimeOffset? scheduledStartAt = null,
+        string? status = null)
+    {
+        var resource = new ProviderResource
+        {
+            MonitoredChannelId = channel.Id,
+            Provider = provider,
+            ResourceKind = resourceKind,
+            ExternalResourceId = externalResourceId,
+            Title = title,
+            Url = resourceKind is ProviderResourceKind.Video or ProviderResourceKind.LiveBroadcast
+                ? $"https://www.youtube.com/watch?v={externalResourceId}"
+                : null,
+            Status = status,
+            PublishedAt = publishedAt,
+            ScheduledStartAt = scheduledStartAt,
+            LastSyncedAt = clock.UtcNow,
+            RawPayloadJson = "{}"
+        };
+
+        dbContext.ProviderResources.Add(resource);
+        await dbContext.SaveChangesAsync();
+        return resource;
+    }
+
+    public async Task<ProviderMessage> CreateProviderMessageAsync(
+        MonitoredChannel channel,
+        MessageSource source = MessageSource.LiveChat,
+        string externalMessageId = "test-message",
+        string? authorName = "Test viewer",
+        string? messageText = "Hello from test",
+        DateTimeOffset? publishedAt = null)
+    {
+        var message = new ProviderMessage
+        {
+            MonitoredChannelId = channel.Id,
+            Provider = channel.Provider,
+            Source = source,
+            ExternalMessageId = externalMessageId,
+            IdentityKey = $"{channel.Provider}:{source}:native:{externalMessageId}",
+            AuthorDisplayName = authorName,
+            MessageText = messageText,
+            PublishedAt = publishedAt ?? clock.UtcNow,
+            LastSeenAt = clock.UtcNow,
+            PayloadSummaryJson = "{}"
+        };
+
+        dbContext.ProviderMessages.Add(message);
+        await dbContext.SaveChangesAsync();
+        return message;
     }
 
     public async Task<(AudienceMember AudienceMember, AudienceRelationshipPeriod Relationship)> CreateAudienceRelationshipAsync(

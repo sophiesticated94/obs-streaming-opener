@@ -6,6 +6,7 @@ public sealed record ProviderEvent(
     Guid MonitoredChannelId,
     Guid? StreamSessionId,
     Guid? AudienceMemberId,
+    Guid? ProviderResourceId,
     ProviderKind Provider,
     StreamEventType EventType,
     string? ExternalEventId,
@@ -16,4 +17,8 @@ public sealed record ProviderEvent(
     decimal? Amount,
     string? Currency,
     DateTimeOffset OccurredAt,
-    string? RawPayloadJson);
+    string? RawPayloadJson,
+    string? IdentityKey = null,
+    decimal? Value = null,
+    string? Unit = null,
+    string? ContextJson = null);

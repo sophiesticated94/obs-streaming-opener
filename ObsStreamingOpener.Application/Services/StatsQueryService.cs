@@ -8,6 +8,7 @@ public sealed class StatsQueryService(
     IStatsStore statsStore,
     IEventStore eventStore,
     IChannelStore channelStore,
+    IProviderResourceStore resourceStore,
     IClock clock) : IStatsQueryService
 {
     public async Task<CurrentStatsDto> GetCurrentStatsAsync(Guid? monitoredChannelId = null, CancellationToken cancellationToken = default)
@@ -46,7 +47,13 @@ public sealed class StatsQueryService(
             lastUpdated);
     }
 
-    public async Task<StatsSummaryDto> GetSummaryAsync(Guid? monitoredChannelId, DateTimeOffset? from, DateTimeOffset? to, CancellationToken cancellationToken = default)
+    public async Task<StatsSummaryDto> GetSummaryAsync(
+        Guid? monitoredChannelId,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        Guid? providerResourceId = null,
+        Guid? streamSessionId = null,
+        CancellationToken cancellationToken = default)
     {
         var channel = monitoredChannelId.HasValue
             ? await channelStore.GetChannelAsync(monitoredChannelId.Value, cancellationToken)
@@ -59,11 +66,11 @@ public sealed class StatsQueryService(
 
         var toValue = to ?? clock.UtcNow;
         var fromValue = from ?? toValue.AddHours(-4);
-        var metrics = await statsStore.GetMetricsAsync(channel.Id, fromValue, toValue, cancellationToken);
+        var metrics = await statsStore.GetMetricsAsync(channel.Id, fromValue, toValue, providerResourceId, streamSessionId, cancellationToken);
         var viewerMetrics = metrics.Where(x => x.Metric == MetricKind.ConcurrentViewers).ToArray();
         var tipMetrics = metrics.Where(x => x.Metric == MetricKind.TipTotal).ToArray();
-        var chatEvents = await eventStore.GetRecentEventsAsync(channel.Id, null, StreamEventType.ChatMessage, 10_000, cancellationToken);
-        var allEvents = await eventStore.GetRecentEventsAsync(channel.Id, null, null, 10_000, cancellationToken);
+        var chatEvents = await eventStore.GetRecentEventsAsync(channel.Id, null, StreamEventType.ChatMessage, 10_000, providerResourceId, streamSessionId, null, cancellationToken);
+        var allEvents = await eventStore.GetRecentEventsAsync(channel.Id, null, null, 10_000, providerResourceId, streamSessionId, null, cancellationToken);
 
         return new StatsSummaryDto(
             fromValue,
@@ -88,9 +95,12 @@ public sealed class StatsQueryService(
         }
 
         var current = await GetCurrentStatsAsync(channel.Id, cancellationToken);
-        var summary = await GetSummaryAsync(channel.Id, now.AddHours(-4), now, cancellationToken);
-        var recent = await eventStore.GetRecentEventsAsync(channel.Id, null, null, 20, cancellationToken);
+        var summary = await GetSummaryAsync(channel.Id, now.AddHours(-4), now, cancellationToken: cancellationToken);
+        var recent = await eventStore.GetRecentEventsAsync(channel.Id, null, null, 20, cancellationToken: cancellationToken);
+        var content = await resourceStore.GetRecentResourcesAsync(channel.Id, null, 10, cancellationToken);
+        var upcoming = await resourceStore.GetUpcomingResourcesAsync(channel.Id, 5, cancellationToken);
+        var comments = await eventStore.GetRecentEventsAsync(channel.Id, ProviderKind.YouTube, StreamEventType.CommentCreated, 10, cancellationToken: cancellationToken);
 
-        return new WidgetDataDto(widgetKey, channel.Id, current, summary, recent, now);
+        return new WidgetDataDto(widgetKey, channel.Id, current, summary, recent, now, content, upcoming, comments);
     }
 }

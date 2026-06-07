@@ -4,7 +4,7 @@ using ObsStreamingOpener.Application.Contracts;
 namespace ObsStreamingOpener.Application.Services;
 
 public sealed class AccountDataPoller(
-    IEnumerable<ITipProviderMonitor> accountMonitors,
+    IEnumerable<IAccountProviderMonitor> accountMonitors,
     ILogger<AccountDataPoller> logger) : IAccountDataPoller
 {
     public async Task PollAsync(CancellationToken cancellationToken = default)

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ObsStreamingOpener.Application.Contracts;
 using ObsStreamingOpener.Application.Dto;
+using ObsStreamingOpener.Application.Exceptions;
 using ObsStreamingOpener.Database.Model;
 using ObsStreamingOpener.Domain;
 
@@ -11,6 +12,7 @@ public sealed class StreamDataPoller(
     IStreamSessionStore sessionStore,
     IStatsStore statsStore,
     IYouTubeApiClient youtubeClient,
+    IYouTubeCredentialResolver youtubeCredentialResolver,
     IClock clock,
     IEnumerable<IStreamingProviderMonitor> streamMonitors,
     ILogger<StreamDataPoller> logger) : IStreamDataPoller
@@ -43,7 +45,25 @@ public sealed class StreamDataPoller(
                 continue;
             }
 
-            var stats = await youtubeClient.GetViewerStatsAsync(connection.ExternalStreamId!, cancellationToken);
+            YouTubeViewerStats? stats;
+            try
+            {
+                var credential = await youtubeCredentialResolver.ResolveForChannelAsync(connection.MonitoredChannelId, cancellationToken);
+                stats = await youtubeClient.GetViewerStatsAsync(connection.ExternalStreamId!, credential?.AccessToken, cancellationToken);
+            }
+            catch (ExternalHttpRequestException ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "YouTube stream metric poll failed for connection {ProviderConnectionId}: {StatusCode} {ProviderErrorCode} {ProviderErrorMessage}. Response: {ResponseBody}",
+                    connection.Id,
+                    (int)ex.StatusCode,
+                    ex.ProviderErrorCode,
+                    ex.ProviderErrorMessage,
+                    ex.ResponseBody);
+                continue;
+            }
+
             if (stats is null)
             {
                 continue;

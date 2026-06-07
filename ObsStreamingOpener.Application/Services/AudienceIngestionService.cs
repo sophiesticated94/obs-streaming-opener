@@ -36,20 +36,24 @@ public sealed class AudienceIngestionService(
         }
 
         var renewed = latestPeriod is not null;
+        var eventType = renewed ? StreamEventType.AudienceRelationshipRenewed : StreamEventType.AudienceRelationshipStarted;
+        var startedAt = relationship.StartedAt == default ? clock.UtcNow : relationship.StartedAt;
+        var externalEventId = $"{relationship.Provider}:audience:{eventType}:{relationship.MonitoredChannelId:N}:{relationship.ExternalAudienceId}:{relationship.RelationshipKind}:{startedAt.ToUniversalTime():O}";
         var eventResult = await eventIngestionService.IngestAsync(new ProviderEvent(
             relationship.MonitoredChannelId,
             null,
             audienceMember.Id,
+            null,
             relationship.Provider,
-            renewed ? StreamEventType.AudienceRelationshipRenewed : StreamEventType.AudienceRelationshipStarted,
-            $"audience-{relationship.MonitoredChannelId:N}-{relationship.Provider}-{relationship.ExternalAudienceId}-{relationship.StartedAt:O}",
+            eventType,
+            externalEventId,
             relationship.DisplayName,
             relationship.ExternalAudienceId,
             renewed ? "Audience relationship renewed" : "Audience relationship started",
             relationship.RelationshipKind.ToString(),
             null,
             null,
-            relationship.StartedAt == default ? clock.UtcNow : relationship.StartedAt,
+            startedAt,
             relationship.RawPayloadJson), cancellationToken);
 
         var period = new AudienceRelationshipPeriod
@@ -58,8 +62,17 @@ public sealed class AudienceIngestionService(
             MonitoredChannelId = relationship.MonitoredChannelId,
             AudienceMemberId = audienceMember.Id,
             RelationshipKind = relationship.RelationshipKind,
-            StartedAt = relationship.StartedAt == default ? clock.UtcNow : relationship.StartedAt,
+            StartedAt = startedAt,
             IsEstimated = relationship.IsEstimated,
+            SupportExternalId = relationship.SupportExternalId,
+            TierName = relationship.TierName,
+            Status = relationship.Status,
+            BillingCadence = relationship.BillingCadence,
+            Amount = relationship.Amount,
+            Currency = relationship.Currency,
+            LastChargeAt = relationship.LastChargeAt,
+            NextChargeAt = relationship.NextChargeAt,
+            CancelledAt = relationship.CancelledAt,
             SourceEventId = eventResult.EventId,
             RawPayloadJson = relationship.RawPayloadJson
         };

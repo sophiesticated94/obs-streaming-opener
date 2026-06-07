@@ -6,7 +6,8 @@ Local-first .NET Web API for OBS browser-source widgets. It stores stream events
 
 - .NET SDK pinned by `global.json`
 - PowerShell examples below assume Windows
-- YouTube Data API key only if real provider polling is enabled
+- Google OAuth client for YouTube account login
+- YouTube Data API key is optional fallback for public video stats
 
 ## Projects
 
@@ -24,6 +25,7 @@ The app is channel-first:
 
 - `MonitoredAccount` owns one or more `MonitoredChannel` records.
 - `ProviderConnection`, `StreamEvent`, `MetricSnapshot`, `StreamSession`, and audience relationships belong to a `MonitoredChannel`.
+- `ProviderCredential` belongs to a `MonitoredAccount` and stores encrypted OAuth tokens for provider operations.
 - `StreamSession` is optional context, so events and metrics can exist during a stream or between streams.
 - Audience terms are unified as `AudienceMember` and `AudienceRelationshipPeriod`; provider-specific names like subscriber, member, or patron stay in raw provider payloads/display labels.
 
@@ -33,6 +35,8 @@ The app is channel-first:
 dotnet restore
 dotnet build
 dotnet test
+npm --cache .\.npm-cache --prefix .\ObsStreamingOpener.Dashboard install
+npm --cache .\.npm-cache --prefix .\ObsStreamingOpener.Dashboard run build
 dotnet run --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
 ```
 
@@ -46,9 +50,16 @@ The first run creates:
 
 ```text
 ObsStreamingOpener.Api\data\streaming-opener.db
+ObsStreamingOpener.Api\data\keys\
 ```
 
-The same SQLite file is used by EF Core application data and Hangfire storage.
+The same SQLite file is used by EF Core application data and Hangfire storage. Data Protection keys in `data\keys` encrypt stored OAuth tokens.
+
+Dashboard URL:
+
+```text
+http://localhost:5198/dashboard
+```
 
 ## Configuration
 
@@ -66,24 +77,58 @@ Default `ObsStreamingOpener.Api/appsettings.json`:
   "YouTube": {
     "ApiKey": "",
     "BaseUrl": "https://www.googleapis.com/youtube/v3/"
+  },
+  "YouTubeOAuth": {
+    "ClientId": "",
+    "ClientSecret": "",
+    "RedirectUri": "http://localhost:5198/api/auth/youtube/callback"
   }
 }
 ```
 
-Use user secrets for local YouTube config:
+Create a Google OAuth client in Google Cloud Console:
+
+1. Enable YouTube Data API v3.
+2. Create an OAuth client for a web application.
+3. Add this authorized redirect URI:
+
+```text
+http://localhost:5198/api/auth/youtube/callback
+```
+
+Use user secrets for local YouTube OAuth config:
 
 ```powershell
 dotnet user-secrets init --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
-dotnet user-secrets set "YouTube:ApiKey" "<your-api-key>" --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
+dotnet user-secrets set "YouTubeOAuth:ClientId" "<google-oauth-client-id>" --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
+dotnet user-secrets set "YouTubeOAuth:ClientSecret" "<google-oauth-client-secret>" --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
+dotnet user-secrets set "YouTubeOAuth:RedirectUri" "http://localhost:5198/api/auth/youtube/callback" --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
 dotnet user-secrets set "StreamingMonitor:EnableStreamDataPolling" "true" --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
 ```
 
-For real YouTube monitoring, a `ProviderConnection` for the channel must contain:
+Optional API-key fallback for public video stats:
+
+```powershell
+dotnet user-secrets set "YouTube:ApiKey" "<youtube-data-api-key>" --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
+```
+
+## Connect YouTube Account
+
+1. Start the API.
+2. Open `http://localhost:5198/dashboard/accounts`.
+3. Click `Connect Google/YouTube account`.
+4. Finish Google OAuth consent.
+5. The callback stores encrypted credentials, discovers YouTube channels, and creates/updates `MonitoredChannel` plus `ProviderConnection` rows.
+6. Use `Re-login` to replace tokens, `Refresh token` to refresh immediately, `Sync channels` to re-read YouTube channels, and `Disconnect` to clear credentials while preserving historical data.
+
+The dashboard shows token state only: connected/expired/re-login/disconnected, expiry, refresh-token availability, and scopes. It never displays raw tokens.
+
+For live YouTube stream monitoring, a `ProviderConnection` for the channel must contain:
 
 - `ExternalStreamId` - YouTube video ID for viewer/like metric polling
 - `ExternalChannelId` - YouTube live chat ID for chat polling
 
-The current skeleton seeds a default account/channel automatically. Admin endpoints for managing provider connections are not implemented yet.
+Connected YouTube channels are discovered from OAuth. Edit channel/provider connection details in the dashboard when you need to attach the current live stream/video IDs.
 
 ## Smoke Test With Sample Data
 
@@ -115,6 +160,25 @@ Invoke-RestMethod http://localhost:5198/api/widgets/stats/data
 
 If you want channel-scoped URLs, copy the `id` from `GET /api/channels` and pass it as `channelId`.
 
+## Dashboard
+
+The Angular dashboard is a separate project in `ObsStreamingOpener.Dashboard` and is served by the API from `/dashboard`.
+
+Build it into the API static folder:
+
+```powershell
+npm --cache .\.npm-cache --prefix .\ObsStreamingOpener.Dashboard install
+npm --cache .\.npm-cache --prefix .\ObsStreamingOpener.Dashboard run build
+```
+
+Local Angular dev server:
+
+```powershell
+npm --cache .\.npm-cache --prefix .\ObsStreamingOpener.Dashboard start
+```
+
+The dashboard uses real API/database state only. Accounts are connected through Google OAuth, channels are discovered from logged-in accounts, and channel/provider/widget edits write back through `/api/config/*`. Polling settings are displayed from effective app configuration.
+
 ## OBS Widgets
 
 Add a Browser Source in OBS and use one of these URLs:
@@ -142,6 +206,24 @@ http://localhost:5198/widgets/stats.html?channelId=<guid>&theme=light&interval=2
 
 ## API Endpoints
 
+Configuration:
+
+- `GET/POST/PUT /api/config/accounts`
+- `GET /api/config/accounts/connected`
+- `GET/POST/PUT /api/config/channels`
+- `GET/POST/PUT/DELETE /api/config/provider-connections`
+- `GET/PUT /api/config/widgets`
+- `GET /api/config/polling`
+
+YouTube OAuth:
+
+- `GET /api/auth/youtube/start?accountId=`
+- `GET /api/auth/youtube/callback`
+- `POST /api/auth/youtube/relogin/{accountId}`
+- `POST /api/auth/youtube/refresh/{accountId}`
+- `POST /api/auth/youtube/sync/{accountId}`
+- `DELETE /api/auth/youtube/disconnect/{accountId}`
+
 Channel/account:
 
 - `GET /api/accounts`
@@ -155,6 +237,10 @@ Channel-scoped data:
 - `GET /api/channels/{channelId}/stats/summary?from=&to=`
 - `GET /api/channels/{channelId}/audience/recent`
 - `GET /api/channels/{channelId}/audience/{audienceMemberId}/history`
+- `GET /api/channels/{channelId}/content/recent?kind=&limit=`
+- `GET /api/channels/{channelId}/content/upcoming?limit=`
+- `GET /api/channels/{channelId}/comments/recent?limit=`
+- `GET /api/channels/{channelId}/youtube/overview`
 
 Compatibility shortcuts use the default channel unless `channelId` is provided:
 
@@ -175,15 +261,33 @@ Development-only:
 - Storage: the same SQLite database as the app, from `ConnectionStrings:StreamingOpener`
 - Stream data polling runs every 5 seconds through the hosted service when enabled
 - Account data polling is scheduled through Hangfire once per minute
+- YouTube recurring jobs:
+  - `youtube-account-summary-sync`: channel metadata and metrics every 5 minutes
+  - `youtube-live-broadcast-sync`: active/upcoming/completed broadcasts every minute
+  - `youtube-content-discovery-sync`: uploads and channel activities every 15 minutes
+  - `youtube-subscriber-sync`: visible subscribers every 30 minutes
 - Hangfire job classes and registration live in `ObsStreamingOpener.Application`
 - API only wires Hangfire storage/server/dashboard
+
+## YouTube Data Collection
+
+The app uses the connected Google/YouTube OAuth account with the read-only YouTube scope. It stores provider-neutral content in `ProviderResource`, appends metric snapshots only when values change, and stores every non-duplicate event.
+
+Collected data includes:
+
+- Channel metadata, audience count, total views, video count, and uploads playlist
+- Uploaded videos and video details such as views, likes, comments, publish time, and raw payload JSON
+- Live broadcasts and live streams, including scheduled/start/end times and status
+- Channel activities as content events
+- Recent comments as `CommentCreated` events
+- Visible subscribers as best-effort `AudienceRelationshipStarted` events; YouTube may hide or limit subscriber identities, so the reliable source is the audience count metric
 
 ## Adding A Provider
 
 1. Add the provider client/wrapper in `ObsStreamingOpener.Infrastructure`.
-2. Implement `IStreamingProviderMonitor` or `ITipProviderMonitor`.
+2. Implement `IStreamingProviderMonitor` or `IAccountProviderMonitor`.
 3. Normalize provider data into `ProviderEvent`, `ProviderAudienceRelationship`, or metric snapshots.
 4. Store page tokens/cursors through `IProviderCursorStore`.
-5. Register stream-scoped monitors as `IStreamingProviderMonitor` and account-scoped monitors as `ITipProviderMonitor` or a future account monitor contract.
+5. Register stream-scoped monitors as `IStreamingProviderMonitor` and account-scoped monitors as `IAccountProviderMonitor`.
 
 Tipply and Patronite are currently registered as stubs.

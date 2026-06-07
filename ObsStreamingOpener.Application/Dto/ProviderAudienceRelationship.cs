@@ -11,4 +11,13 @@ public sealed record ProviderAudienceRelationship(
     AudienceRelationshipKind RelationshipKind,
     DateTimeOffset StartedAt,
     bool IsEstimated,
-    string? RawPayloadJson);
+    string? RawPayloadJson,
+    string? SupportExternalId = null,
+    string? TierName = null,
+    RelationshipStatus Status = RelationshipStatus.Active,
+    BillingCadence BillingCadence = BillingCadence.Unknown,
+    decimal? Amount = null,
+    string? Currency = null,
+    DateTimeOffset? LastChargeAt = null,
+    DateTimeOffset? NextChargeAt = null,
+    DateTimeOffset? CancelledAt = null);

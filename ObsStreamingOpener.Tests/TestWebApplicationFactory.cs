@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ObsStreamingOpener.Application.Contracts;
+using ObsStreamingOpener.Application.Dto;
 using ObsStreamingOpener.Database;
 
 namespace ObsStreamingOpener.Tests;
@@ -24,7 +25,10 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:StreamingOpener"] = $"Data Source={Path.Combine(_sqliteDirectory, "streaming-opener.db")}",
-                ["StreamingMonitor:EnableStreamDataPolling"] = "false"
+                ["StreamingMonitor:EnableStreamDataPolling"] = "false",
+                ["YouTubeOAuth:ClientId"] = "test-client-id",
+                ["YouTubeOAuth:ClientSecret"] = "test-client-secret",
+                ["YouTubeOAuth:RedirectUri"] = "http://localhost/api/auth/youtube/callback"
             });
         });
 
@@ -32,7 +36,9 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<DbContextOptions<StreamingOpenerDbContext>>();
             services.RemoveAll<IDbContextOptionsConfiguration<StreamingOpenerDbContext>>();
+            services.RemoveAll<IYouTubeOAuthClient>();
             services.AddDbContext<StreamingOpenerDbContext>(options => options.UseInMemoryDatabase(_databaseName));
+            services.AddSingleton<IYouTubeOAuthClient, FakeYouTubeOAuthClient>();
         });
     }
 
@@ -49,5 +55,42 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
             scope.ServiceProvider.GetRequiredService<IClock>());
 
         await seed(seeder);
+    }
+
+    private sealed class FakeYouTubeOAuthClient : IYouTubeOAuthClient
+    {
+        public Task<YouTubeTokenResponse> ExchangeCodeAsync(string code, string redirectUri, CancellationToken cancellationToken = default)
+            => Task.FromResult(new YouTubeTokenResponse(
+                $"access-token-for-{code}",
+                $"refresh-token-for-{code}",
+                3600,
+                "Bearer",
+                "openid email profile https://www.googleapis.com/auth/youtube.readonly"));
+
+        public Task<YouTubeTokenResponse> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
+            => Task.FromResult(new YouTubeTokenResponse(
+                $"refreshed-access-token-for-{refreshToken}",
+                null,
+                7200,
+                "Bearer",
+                "openid email profile https://www.googleapis.com/auth/youtube.readonly"));
+
+        public Task<YouTubeUserInfo> GetUserInfoAsync(string accessToken, CancellationToken cancellationToken = default)
+            => Task.FromResult(new YouTubeUserInfo(
+                "google-user-1",
+                "creator@example.test",
+                "Creator From OAuth"));
+
+        public Task<IReadOnlyList<YouTubeChannelInfo>> GetMyChannelsAsync(string accessToken, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<YouTubeChannelInfo>>(
+            [
+                new YouTubeChannelInfo(
+                    "youtube-channel-1",
+                    "OAuth Channel",
+                    "https://youtube.com/channel/youtube-channel-1",
+                    1234,
+                    5678,
+                    "{\"id\":\"youtube-channel-1\"}")
+            ]);
     }
 }

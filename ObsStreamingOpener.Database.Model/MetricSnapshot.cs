@@ -16,6 +16,8 @@ public sealed class MetricSnapshot
 
     public Guid? ProviderConnectionId { get; set; }
 
+    public Guid? ProviderResourceId { get; set; }
+
     [Required]
     public ProviderKind Provider { get; set; }
 
@@ -45,4 +47,7 @@ public sealed class MetricSnapshot
 
     [ForeignKey(nameof(ProviderConnectionId))]
     public ProviderConnection? ProviderConnection { get; set; }
+
+    [ForeignKey(nameof(ProviderResourceId))]
+    public ProviderResource? ProviderResource { get; set; }
 }

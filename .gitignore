@@ -20,6 +20,7 @@ logs/
 # Secrets and environment overrides
 secrets.json
 .env
+youtube-client-id.txt
 appsettings.Local.json
 appsettings.*.Local.json
 
@@ -28,6 +29,13 @@ TestResults/
 coverage/
 *.coverage
 *.coveragexml
+
+# Frontend
+node_modules/
+.angular/
+.npm-cache/
+playwright/.auth/
+playwright/debug-artifacts/
 
 # Publish artifacts
 publish/

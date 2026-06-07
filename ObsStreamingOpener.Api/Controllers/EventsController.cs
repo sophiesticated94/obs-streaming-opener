@@ -24,7 +24,7 @@ public sealed class EventsController(IEventStore eventStore, IChannelStore chann
             return NotFound();
         }
 
-        var events = await eventStore.GetRecentEventsAsync(channel.Id, provider, type, limit, cancellationToken);
+        var events = await eventStore.GetRecentEventsAsync(channel.Id, provider, type, limit, cancellationToken: cancellationToken);
         return Ok(events);
     }
 }

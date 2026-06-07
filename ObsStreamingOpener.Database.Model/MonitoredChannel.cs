@@ -41,7 +41,17 @@ public sealed class MonitoredChannel
 
     public ICollection<StreamEvent> Events { get; set; } = new List<StreamEvent>();
 
+    public ICollection<Tip> Tips { get; set; } = new List<Tip>();
+
+    public ICollection<StreamAlert> Alerts { get; set; } = new List<StreamAlert>();
+
+    public ICollection<AlertRule> AlertRules { get; set; } = new List<AlertRule>();
+
+    public ICollection<ProviderMessage> Messages { get; set; } = new List<ProviderMessage>();
+
     public ICollection<MetricSnapshot> MetricSnapshots { get; set; } = new List<MetricSnapshot>();
+
+    public ICollection<ProviderResource> ProviderResources { get; set; } = new List<ProviderResource>();
 
     public ICollection<AudienceRelationshipPeriod> AudienceRelationshipPeriods { get; set; } = new List<AudienceRelationshipPeriod>();
 }

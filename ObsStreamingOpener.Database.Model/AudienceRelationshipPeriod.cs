@@ -25,6 +25,27 @@ public sealed class AudienceRelationshipPeriod
 
     public bool IsEstimated { get; set; }
 
+    [MaxLength(256)]
+    public string? SupportExternalId { get; set; }
+
+    [MaxLength(256)]
+    public string? TierName { get; set; }
+
+    public RelationshipStatus Status { get; set; } = RelationshipStatus.Active;
+
+    public BillingCadence BillingCadence { get; set; } = BillingCadence.Unknown;
+
+    public decimal? Amount { get; set; }
+
+    [MaxLength(32)]
+    public string? Currency { get; set; }
+
+    public DateTimeOffset? LastChargeAt { get; set; }
+
+    public DateTimeOffset? NextChargeAt { get; set; }
+
+    public DateTimeOffset? CancelledAt { get; set; }
+
     public Guid? SourceEventId { get; set; }
 
     [Column(TypeName = "TEXT")]

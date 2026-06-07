@@ -50,6 +50,24 @@ public interface IIntegrationTestDataSeeder
         ProviderConnection? providerConnection = null,
         DateTimeOffset? capturedAt = null);
 
+    Task<ProviderResource> CreateProviderResourceAsync(
+        MonitoredChannel channel,
+        ProviderResourceKind resourceKind,
+        string externalResourceId,
+        string? title = null,
+        ProviderKind provider = ProviderKind.YouTube,
+        DateTimeOffset? publishedAt = null,
+        DateTimeOffset? scheduledStartAt = null,
+        string? status = null);
+
+    Task<ProviderMessage> CreateProviderMessageAsync(
+        MonitoredChannel channel,
+        MessageSource source = MessageSource.LiveChat,
+        string externalMessageId = "test-message",
+        string? authorName = "Test viewer",
+        string? messageText = "Hello from test",
+        DateTimeOffset? publishedAt = null);
+
     Task<(AudienceMember AudienceMember, AudienceRelationshipPeriod Relationship)> CreateAudienceRelationshipAsync(
         MonitoredChannel channel,
         string externalAudienceId,

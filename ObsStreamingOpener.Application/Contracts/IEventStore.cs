@@ -10,5 +10,16 @@ public interface IEventStore
 
     Task AddEventAsync(StreamEvent streamEvent, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<RecentEventDto>> GetRecentEventsAsync(Guid? monitoredChannelId, ProviderKind? provider, StreamEventType? eventType, int limit, CancellationToken cancellationToken = default);
+    Task<IngestedEventResult> UpsertEventAsync(StreamEvent streamEvent, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+
+    Task<IReadOnlyList<RecentEventDto>> GetRecentEventsAsync(
+        Guid? monitoredChannelId,
+        ProviderKind? provider,
+        StreamEventType? eventType,
+        int limit,
+        Guid? providerResourceId = null,
+        Guid? streamSessionId = null,
+        Guid? audienceMemberId = null,
+        CancellationToken cancellationToken = default);
 }

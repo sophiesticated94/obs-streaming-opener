@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -26,6 +27,7 @@ public sealed class DependencyInjectionTests
             .Build();
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddDataProtection();
         services.AddApplication(configuration);
         services.AddInfrastructure(configuration);
         services.AddDatabase(configuration);
