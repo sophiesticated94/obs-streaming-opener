@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
+using System.Xml;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ObsStreamingOpener.Application.Contracts;
@@ -182,8 +183,10 @@ public sealed class YouTubeApiClient(
                     ProviderResourceKind.Video,
                     x.Snippet?.Title,
                     x.Snippet?.Description,
+                    BestThumbnail(x.Snippet?.Thumbnails),
                     x.Status?.PrivacyStatus,
                     x.ContentDetails?.VideoPublishedAt ?? x.Snippet?.PublishedAt,
+                    null,
                     null,
                     null,
                     null,
@@ -219,11 +222,13 @@ public sealed class YouTubeApiClient(
                 ProviderResourceKind.Video,
                 x.Snippet?.Title,
                 x.Snippet?.Description,
+                BestThumbnail(x.Snippet?.Thumbnails),
                 x.Status?.PrivacyStatus,
                 x.Snippet?.PublishedAt,
                 x.LiveStreamingDetails?.ScheduledStartTime,
                 x.LiveStreamingDetails?.ActualStartTime,
                 x.LiveStreamingDetails?.ActualEndTime,
+                ParseDurationSeconds(x.ContentDetails?.Duration),
                 ParseLong(x.Statistics?.ViewCount),
                 ParseLong(x.Statistics?.LikeCount),
                 ParseLong(x.Statistics?.CommentCount),
@@ -327,11 +332,13 @@ public sealed class YouTubeApiClient(
                 ProviderResourceKind.LiveBroadcast,
                 x.Snippet?.Title,
                 x.Snippet?.Description,
+                BestThumbnail(x.Snippet?.Thumbnails),
                 x.Status?.LifeCycleStatus ?? broadcastStatus,
                 x.Snippet?.PublishedAt,
                 x.Snippet?.ScheduledStartTime,
                 x.Snippet?.ActualStartTime,
                 x.Snippet?.ActualEndTime,
+                null,
                 null,
                 null,
                 null,
@@ -356,8 +363,10 @@ public sealed class YouTubeApiClient(
                 ProviderResourceKind.LiveStream,
                 x.Snippet?.Title,
                 x.Snippet?.Description,
+                BestThumbnail(x.Snippet?.Thumbnails),
                 x.Status?.StreamStatus,
                 x.Snippet?.PublishedAt,
+                null,
                 null,
                 null,
                 null,
@@ -393,16 +402,42 @@ public sealed class YouTubeApiClient(
     private static decimal? MicrosToAmount(ulong? amountMicros)
         => amountMicros.HasValue ? amountMicros.Value / 1_000_000m : null;
 
+    private static int? ParseDurationSeconds(string? duration)
+    {
+        if (string.IsNullOrWhiteSpace(duration))
+        {
+            return null;
+        }
+
+        try
+        {
+            return (int)Math.Round(XmlConvert.ToTimeSpan(duration).TotalSeconds);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static string? BestThumbnail(YouTubeThumbnailsResponse? thumbnails)
+        => thumbnails?.Maxres?.Url
+            ?? thumbnails?.Standard?.Url
+            ?? thumbnails?.High?.Url
+            ?? thumbnails?.Medium?.Url
+            ?? thumbnails?.Default?.Url;
+
     private static YouTubeContentItem? ToContentItem(
         string? id,
         ProviderResourceKind kind,
         string? title,
         string? description,
+        string? thumbnailUrl,
         string? status,
         DateTimeOffset? publishedAt,
         DateTimeOffset? scheduledStartAt,
         DateTimeOffset? actualStartAt,
         DateTimeOffset? actualEndAt,
+        int? durationSeconds,
         long? viewCount,
         long? likeCount,
         long? commentCount,
@@ -422,11 +457,13 @@ public sealed class YouTubeApiClient(
             title,
             description,
             kind is ProviderResourceKind.Video or ProviderResourceKind.LiveBroadcast ? $"https://www.youtube.com/watch?v={id}" : null,
+            thumbnailUrl,
             status,
             publishedAt,
             scheduledStartAt,
             actualStartAt,
             actualEndAt,
+            durationSeconds,
             viewCount,
             likeCount,
             commentCount,
@@ -450,6 +487,7 @@ public sealed class YouTubeApiClient(
         [property: JsonPropertyName("snippet")] YouTubeSnippetResponse? Snippet,
         [property: JsonPropertyName("status")] YouTubePrivacyStatusResponse? Status,
         [property: JsonPropertyName("liveStreamingDetails")] YouTubeLiveStreamingDetailsResponse? LiveStreamingDetails,
+        [property: JsonPropertyName("contentDetails")] YouTubeVideoContentDetailsResponse? ContentDetails,
         [property: JsonPropertyName("statistics")] YouTubeVideoStatisticsResponse? Statistics);
 
     private sealed record YouTubeLiveStreamingDetailsResponse(
@@ -463,6 +501,9 @@ public sealed class YouTubeApiClient(
         [property: JsonPropertyName("viewCount")] string? ViewCount,
         [property: JsonPropertyName("likeCount")] string? LikeCount,
         [property: JsonPropertyName("commentCount")] string? CommentCount);
+
+    private sealed record YouTubeVideoContentDetailsResponse(
+        [property: JsonPropertyName("duration")] string? Duration);
 
     private sealed record YouTubeLiveChatMessagesResponse
     {
@@ -609,6 +650,7 @@ public sealed class YouTubeApiClient(
         [property: JsonPropertyName("title")] string? Title,
         [property: JsonPropertyName("description")] string? Description,
         [property: JsonPropertyName("publishedAt")] DateTimeOffset? PublishedAt,
+        [property: JsonPropertyName("thumbnails")] YouTubeThumbnailsResponse? Thumbnails,
         [property: JsonPropertyName("resourceId")] YouTubeResourceIdResponse? ResourceId);
 
     private sealed record YouTubePlaylistContentDetailsResponse(
@@ -661,7 +703,12 @@ public sealed class YouTubeApiClient(
         [property: JsonPropertyName("resourceId")] YouTubeResourceIdResponse? ResourceId,
         [property: JsonPropertyName("thumbnails")] YouTubeThumbnailsResponse? Thumbnails);
 
-    private sealed record YouTubeThumbnailsResponse([property: JsonPropertyName("default")] YouTubeThumbnailResponse? Default);
+    private sealed record YouTubeThumbnailsResponse(
+        [property: JsonPropertyName("default")] YouTubeThumbnailResponse? Default,
+        [property: JsonPropertyName("medium")] YouTubeThumbnailResponse? Medium,
+        [property: JsonPropertyName("high")] YouTubeThumbnailResponse? High,
+        [property: JsonPropertyName("standard")] YouTubeThumbnailResponse? Standard,
+        [property: JsonPropertyName("maxres")] YouTubeThumbnailResponse? Maxres);
 
     private sealed record YouTubeThumbnailResponse([property: JsonPropertyName("url")] string? Url);
 
@@ -710,6 +757,7 @@ public sealed class YouTubeApiClient(
         [property: JsonPropertyName("title")] string? Title,
         [property: JsonPropertyName("description")] string? Description,
         [property: JsonPropertyName("publishedAt")] DateTimeOffset? PublishedAt,
+        [property: JsonPropertyName("thumbnails")] YouTubeThumbnailsResponse? Thumbnails,
         [property: JsonPropertyName("scheduledStartTime")] DateTimeOffset? ScheduledStartTime,
         [property: JsonPropertyName("actualStartTime")] DateTimeOffset? ActualStartTime,
         [property: JsonPropertyName("actualEndTime")] DateTimeOffset? ActualEndTime,
@@ -737,7 +785,8 @@ public sealed class YouTubeApiClient(
         [property: JsonPropertyName("channelId")] string? ChannelId,
         [property: JsonPropertyName("title")] string? Title,
         [property: JsonPropertyName("description")] string? Description,
-        [property: JsonPropertyName("publishedAt")] DateTimeOffset? PublishedAt);
+        [property: JsonPropertyName("publishedAt")] DateTimeOffset? PublishedAt,
+        [property: JsonPropertyName("thumbnails")] YouTubeThumbnailsResponse? Thumbnails);
 
     private sealed record YouTubePrivacyStatusResponse(
         [property: JsonPropertyName("privacyStatus")] string? PrivacyStatus);

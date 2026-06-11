@@ -28,7 +28,7 @@ export const routes: Routes = [
   },
   {
     path: 'activity',
-    loadComponent: () => import('./features/activity/activity.page').then((m) => m.ActivityPage)
+    loadComponent: () => import('./features/content/content.page').then((m) => m.ContentPage)
   },
   {
     path: 'streams/current',

@@ -71,7 +71,8 @@ public sealed class IntegrationTestDataSeeder(StreamingOpenerDbContext dbContext
         MonitoredChannel channel,
         string title = "Test stream",
         bool isActive = true,
-        DateTimeOffset? startedAt = null)
+        DateTimeOffset? startedAt = null,
+        ProviderResource? providerResource = null)
     {
         var session = new StreamSession
         {
@@ -80,6 +81,7 @@ public sealed class IntegrationTestDataSeeder(StreamingOpenerDbContext dbContext
             ExternalSessionId = $"test-session-{Guid.NewGuid():N}",
             Title = title,
             IsActive = isActive,
+            ProviderResourceId = providerResource?.Id,
             StartedAt = startedAt ?? clock.UtcNow,
             LastSyncedAt = clock.UtcNow
         };
@@ -100,6 +102,7 @@ public sealed class IntegrationTestDataSeeder(StreamingOpenerDbContext dbContext
         string? currency = null,
         StreamSession? streamSession = null,
         AudienceMember? audienceMember = null,
+        ProviderResource? providerResource = null,
         DateTimeOffset? occurredAt = null)
     {
         var streamEvent = new StreamEvent
@@ -107,6 +110,7 @@ public sealed class IntegrationTestDataSeeder(StreamingOpenerDbContext dbContext
             MonitoredChannelId = channel.Id,
             StreamSessionId = streamSession?.Id,
             AudienceMemberId = audienceMember?.Id,
+            ProviderResourceId = providerResource?.Id,
             Provider = provider,
             EventType = eventType,
             ExternalEventId = externalEventId,
@@ -138,6 +142,7 @@ public sealed class IntegrationTestDataSeeder(StreamingOpenerDbContext dbContext
         SnapshotReason snapshotReason = SnapshotReason.Manual,
         StreamSession? streamSession = null,
         ProviderConnection? providerConnection = null,
+        ProviderResource? providerResource = null,
         DateTimeOffset? capturedAt = null)
     {
         var snapshot = new MetricSnapshot
@@ -145,6 +150,7 @@ public sealed class IntegrationTestDataSeeder(StreamingOpenerDbContext dbContext
             MonitoredChannelId = channel.Id,
             StreamSessionId = streamSession?.Id,
             ProviderConnectionId = providerConnection?.Id,
+            ProviderResourceId = providerResource?.Id,
             Provider = provider,
             Metric = metric,
             SnapshotReason = snapshotReason,
@@ -166,7 +172,9 @@ public sealed class IntegrationTestDataSeeder(StreamingOpenerDbContext dbContext
         ProviderKind provider = ProviderKind.YouTube,
         DateTimeOffset? publishedAt = null,
         DateTimeOffset? scheduledStartAt = null,
-        string? status = null)
+        string? status = null,
+        string? thumbnailUrl = null,
+        int? durationSeconds = null)
     {
         var resource = new ProviderResource
         {
@@ -178,9 +186,11 @@ public sealed class IntegrationTestDataSeeder(StreamingOpenerDbContext dbContext
             Url = resourceKind is ProviderResourceKind.Video or ProviderResourceKind.LiveBroadcast
                 ? $"https://www.youtube.com/watch?v={externalResourceId}"
                 : null,
+            ThumbnailUrl = thumbnailUrl,
             Status = status,
             PublishedAt = publishedAt,
             ScheduledStartAt = scheduledStartAt,
+            DurationSeconds = durationSeconds,
             LastSyncedAt = clock.UtcNow,
             RawPayloadJson = "{}"
         };
@@ -196,11 +206,15 @@ public sealed class IntegrationTestDataSeeder(StreamingOpenerDbContext dbContext
         string externalMessageId = "test-message",
         string? authorName = "Test viewer",
         string? messageText = "Hello from test",
+        StreamSession? streamSession = null,
+        ProviderResource? providerResource = null,
         DateTimeOffset? publishedAt = null)
     {
         var message = new ProviderMessage
         {
             MonitoredChannelId = channel.Id,
+            StreamSessionId = streamSession?.Id,
+            ProviderResourceId = providerResource?.Id,
             Provider = channel.Provider,
             Source = source,
             ExternalMessageId = externalMessageId,

@@ -8,7 +8,7 @@ using ObsStreamingOpener.Domain;
 
 namespace ObsStreamingOpener.Database;
 
-public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext, IClock clock, ILogger<StreamingOpenerRepository>? logger = null) :
+public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext, IClock clock, IProviderResourcePatchService? providerResourcePatchService = null, ILogger<StreamingOpenerRepository>? logger = null) :
     IChannelStore,
     IEventStore,
     IStatsStore,
@@ -23,6 +23,8 @@ public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext
     IAudienceStore,
     ISupportTransactionStore
 {
+    private readonly IProviderResourcePatchService resourcePatchService = providerResourcePatchService ?? new ProviderResourcePatchService();
+
     public async Task<IReadOnlyList<MonitoredAccountDto>> GetAccountsAsync(CancellationToken cancellationToken = default)
     {
         return await dbContext.MonitoredAccounts
@@ -847,6 +849,9 @@ public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext
     }
 
     public async Task<IReadOnlyList<StreamEventAlertTraceDto>> GetEventAlertTraceAsync(Guid monitoredChannelId, Guid? streamSessionId, int limit, CancellationToken cancellationToken = default)
+        => await GetEventAlertTraceAsync(monitoredChannelId, streamSessionId, null, limit, cancellationToken);
+
+    public async Task<IReadOnlyList<StreamEventAlertTraceDto>> GetEventAlertTraceAsync(Guid monitoredChannelId, Guid? streamSessionId, Guid? providerResourceId, int limit, CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit, 1, 1000);
         var query = dbContext.StreamEvents
@@ -856,6 +861,11 @@ public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext
         if (streamSessionId.HasValue)
         {
             query = query.Where(x => x.StreamSessionId == streamSessionId.Value);
+        }
+
+        if (providerResourceId.HasValue)
+        {
+            query = query.Where(x => x.ProviderResourceId == providerResourceId.Value);
         }
 
         var events = await query
@@ -928,6 +938,32 @@ public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext
         return metrics.OrderByDescending(x => x.CapturedAt).FirstOrDefault();
     }
 
+    public async Task<MetricSnapshot?> GetLatestMetricAsync(
+        Guid monitoredChannelId,
+        MetricKind metric,
+        Guid? providerResourceId,
+        Guid? streamSessionId,
+        CancellationToken cancellationToken = default)
+    {
+        var query = dbContext.MetricSnapshots
+            .AsNoTracking()
+            .Where(x => x.MonitoredChannelId == monitoredChannelId && x.Metric == metric);
+
+        if (providerResourceId.HasValue)
+        {
+            query = query.Where(x => x.ProviderResourceId == providerResourceId.Value);
+        }
+
+        if (streamSessionId.HasValue)
+        {
+            query = query.Where(x => x.StreamSessionId == streamSessionId.Value);
+        }
+
+        return await query
+            .OrderByDescending(x => x.CapturedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<MetricSnapshot>> GetMetricsAsync(
         Guid monitoredChannelId,
         DateTimeOffset from,
@@ -977,37 +1013,19 @@ public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext
             dbContext.ProviderResources.Add(entity);
         }
 
-        var observedKinds = ReadJsonList<ProviderResourceKind>(entity.ObservedKindsJson);
-        if (!observedKinds.Contains(resource.ResourceKind))
-        {
-            observedKinds.Add(resource.ResourceKind);
-        }
-
-        var nextPrimaryKind = ChoosePrimaryKind(observedKinds);
-        var patchFields = new List<ProviderResourcePatchFieldDto>();
-        PatchIfChanged(nameof(ProviderResource.ResourceKind), entity.ResourceKind, nextPrimaryKind, v => entity.ResourceKind = v, patchFields);
-        PatchIfChanged(nameof(ProviderResource.Title), entity.Title, NormalizeOptional(resource.Title), v => entity.Title = v, patchFields);
-        PatchIfChanged(nameof(ProviderResource.Description), entity.Description, NormalizeOptional(resource.Description), v => entity.Description = v, patchFields);
-        PatchIfChanged(nameof(ProviderResource.Url), entity.Url, NormalizeOptional(resource.Url), v => entity.Url = v, patchFields);
-        PatchIfChanged(nameof(ProviderResource.Status), entity.Status, NormalizeOptional(resource.Status), v => entity.Status = v, patchFields);
-        PatchIfChanged(nameof(ProviderResource.PublishedAt), entity.PublishedAt, resource.PublishedAt, v => entity.PublishedAt = v, patchFields);
-        PatchIfChanged(nameof(ProviderResource.ScheduledStartAt), entity.ScheduledStartAt, resource.ScheduledStartAt, v => entity.ScheduledStartAt = v, patchFields);
-        PatchIfChanged(nameof(ProviderResource.ActualStartAt), entity.ActualStartAt, resource.ActualStartAt, v => entity.ActualStartAt = v, patchFields);
-        PatchIfChanged(nameof(ProviderResource.ActualEndAt), entity.ActualEndAt, resource.ActualEndAt, v => entity.ActualEndAt = v, patchFields);
-        PatchIfChanged(nameof(ProviderResource.ObservedKindsJson), entity.ObservedKindsJson, JsonSerializer.Serialize(observedKinds.Distinct().OrderBy(x => x.ToString())), v => entity.ObservedKindsJson = v, patchFields);
+        var patchResult = resourcePatchService.Apply(entity, resource, clock.UtcNow);
         entity.RawPayloadJson = resource.RawPayloadJson;
         entity.LastSyncedAt = clock.UtcNow;
+        entity.PatchHistoryJson = patchResult.HistoryJson;
 
-        if (patchFields.Count > 0)
+        if (patchResult.Fields.Count > 0)
         {
-            var history = ReadJsonList<ProviderResourcePatchDto>(entity.PatchHistoryJson);
-            history.Add(new ProviderResourcePatchDto(clock.UtcNow, resource.Provider.ToString(), patchFields));
-            entity.PatchHistoryJson = JsonSerializer.Serialize(history);
             logger?.LogInformation(
-                "Patched provider resource {Provider} {ExternalResourceId} with fields {Fields}",
+                "Patched provider resource {ResourceId} {Provider} {ExternalResourceId} with fields {Fields}",
+                entity.Id,
                 resource.Provider,
                 resource.ExternalResourceId,
-                string.Join(", ", patchFields.Select(x => x.Field)));
+                string.Join(", ", patchResult.Fields.Select(x => x.Field)));
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -1118,6 +1136,20 @@ public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext
 
     public Task<StreamSessionDto?> GetCurrentSessionAsync(Guid monitoredChannelId, CancellationToken cancellationToken = default)
         => GetCurrentStreamAsync(monitoredChannelId, cancellationToken);
+
+    public async Task<StreamSessionDto?> GetSessionByProviderResourceAsync(Guid monitoredChannelId, Guid providerResourceId, CancellationToken cancellationToken = default)
+    {
+        var sessions = await dbContext.StreamSessions
+            .AsNoTracking()
+            .Where(x => x.MonitoredChannelId == monitoredChannelId && x.ProviderResourceId == providerResourceId)
+            .ToListAsync(cancellationToken);
+
+        return sessions
+            .OrderByDescending(x => x.IsActive)
+            .ThenByDescending(x => x.ActualStartAt ?? x.StartedAt)
+            .Select(ToDto)
+            .FirstOrDefault();
+    }
 
     public async Task<StreamSessionDto> UpsertSessionAsync(ProviderStreamSession session, CancellationToken cancellationToken = default)
     {
@@ -1606,7 +1638,7 @@ public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext
             connection.DisplayName,
             connection.IsEnabled);
 
-    private static ProviderResourceDto ToDto(ProviderResource resource)
+    private ProviderResourceDto ToDto(ProviderResource resource)
         => new(
             resource.Id,
             resource.MonitoredChannelId,
@@ -1619,13 +1651,15 @@ public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext
             resource.Title,
             resource.Description,
             resource.Url,
+            resource.ThumbnailUrl,
             resource.Status,
             resource.PublishedAt,
             resource.ScheduledStartAt,
             resource.ActualStartAt,
             resource.ActualEndAt,
+            resource.DurationSeconds,
             resource.LastSyncedAt,
-            ReadJsonList<ProviderResourcePatchDto>(resource.PatchHistoryJson));
+            resourcePatchService.ReadCompactHistory(resource.PatchHistoryJson));
 
     private static AlertRuleDto ToDto(AlertRule rule)
         => new(

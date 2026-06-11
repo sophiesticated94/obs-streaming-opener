@@ -17,5 +17,13 @@ public interface IAlertService
 
     Task<IReadOnlyList<StreamEventAlertTraceDto>> GetEventAlertTraceAsync(Guid monitoredChannelId, Guid? streamSessionId, int limit, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<StreamEventAlertTraceDto>> GetEventAlertTraceAsync(
+        Guid monitoredChannelId,
+        Guid? streamSessionId,
+        Guid? providerResourceId,
+        int limit,
+        CancellationToken cancellationToken = default)
+        => GetEventAlertTraceAsync(monitoredChannelId, streamSessionId, limit, cancellationToken);
+
     Task<AlertWidgetDataDto> GetWidgetDataAsync(Guid monitoredChannelId, Guid? streamSessionId, CancellationToken cancellationToken = default);
 }

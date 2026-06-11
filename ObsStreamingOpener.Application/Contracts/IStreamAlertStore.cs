@@ -16,4 +16,12 @@ public interface IStreamAlertStore
     Task<bool> AcknowledgeAlertAsync(Guid monitoredChannelId, Guid alertId, DateTimeOffset acknowledgedAtUtc, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<StreamEventAlertTraceDto>> GetEventAlertTraceAsync(Guid monitoredChannelId, Guid? streamSessionId, int limit, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<StreamEventAlertTraceDto>> GetEventAlertTraceAsync(
+        Guid monitoredChannelId,
+        Guid? streamSessionId,
+        Guid? providerResourceId,
+        int limit,
+        CancellationToken cancellationToken = default)
+        => GetEventAlertTraceAsync(monitoredChannelId, streamSessionId, limit, cancellationToken);
 }

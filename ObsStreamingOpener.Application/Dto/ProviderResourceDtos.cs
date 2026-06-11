@@ -10,11 +10,13 @@ public sealed record ProviderResourceUpsert(
     string? Title,
     string? Description,
     string? Url,
+    string? ThumbnailUrl,
     string? Status,
     DateTimeOffset? PublishedAt,
     DateTimeOffset? ScheduledStartAt,
     DateTimeOffset? ActualStartAt,
     DateTimeOffset? ActualEndAt,
+    int? DurationSeconds,
     string? RawPayloadJson);
 
 public sealed record ProviderResourceDto(
@@ -27,11 +29,13 @@ public sealed record ProviderResourceDto(
     string? Title,
     string? Description,
     string? Url,
+    string? ThumbnailUrl,
     string? Status,
     DateTimeOffset? PublishedAt,
     DateTimeOffset? ScheduledStartAt,
     DateTimeOffset? ActualStartAt,
     DateTimeOffset? ActualEndAt,
+    int? DurationSeconds,
     DateTimeOffset LastSyncedAt,
     IReadOnlyList<ProviderResourcePatchDto> PatchHistory);
 

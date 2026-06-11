@@ -52,6 +52,27 @@ public sealed class EndpointIntegrationTests
     }
 
     [Fact]
+    public async Task CurrentStreamEndpoint_ReturnsNullWhenChannelHasNoActiveStream()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateClient();
+        Guid channelId = default;
+        await factory.SeedDatabaseAsync(async seeder =>
+        {
+            var account = await seeder.CreateAccountAsync("Idle account");
+            var channel = await seeder.CreateChannelAsync(account, externalChannelId: "idle-channel", displayName: "Idle channel");
+            channelId = channel.Id;
+        });
+
+        using var response = await client.GetAsync($"/api/channels/{channelId}/stream/current");
+        using var missingChannelResponse = await client.GetAsync($"/api/channels/{Guid.NewGuid()}/stream/current");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("null", await response.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.NotFound, missingChannelResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task DevSampleEvent_IsVisibleThroughCompatibilityRecentEventsEndpoint()
     {
         await using var factory = new TestWebApplicationFactory();
@@ -243,6 +264,51 @@ public sealed class EndpointIntegrationTests
     }
 
     [Fact]
+    public async Task ResourceScopedEndpoints_ReturnMetricsAndActivityForSelectedResource()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateClient();
+        Guid channelId = default;
+        Guid resourceId = default;
+        Guid sessionId = default;
+
+        await factory.SeedDatabaseAsync(async seeder =>
+        {
+            var account = await seeder.CreateAccountAsync("Resource scoped account");
+            var channel = await seeder.CreateChannelAsync(account, externalChannelId: "resource-scoped-channel", displayName: "Resource scoped channel");
+            var resource = await seeder.CreateProviderResourceAsync(
+                channel,
+                ProviderResourceKind.LiveBroadcast,
+                "resource-stream",
+                "Resource stream",
+                scheduledStartAt: DateTimeOffset.UtcNow.AddMinutes(-20),
+                status: "active",
+                thumbnailUrl: "https://img.youtube.test/resource-stream.jpg",
+                durationSeconds: 1800);
+            var stream = await seeder.CreateStreamSessionAsync(channel, "Resource stream", providerResource: resource);
+            await seeder.CreateMetricSnapshotAsync(channel, MetricKind.Likes, 12, ProviderKind.YouTube, streamSession: stream, providerResource: resource);
+            await seeder.CreateMetricSnapshotAsync(channel, MetricKind.ConcurrentViewers, 44, ProviderKind.YouTube, streamSession: stream, providerResource: resource);
+            await seeder.CreateEventAsync(channel, StreamEventType.ChatMessage, ProviderKind.YouTube, externalEventId: "resource-event", message: "Resource event", streamSession: stream, providerResource: resource);
+            await seeder.CreateProviderMessageAsync(channel, MessageSource.LiveChat, "resource-message", "Viewer", "Resource message", stream, resource);
+            channelId = channel.Id;
+            resourceId = resource.Id;
+            sessionId = stream.Id;
+        });
+
+        var stats = await client.GetFromJsonAsync<CurrentStatsDto>($"/api/channels/{channelId}/stats/current?providerResourceId={resourceId}", JsonOptions);
+        var events = await client.GetFromJsonAsync<List<RecentEventDto>>($"/api/channels/{channelId}/events/recent?providerResourceId={resourceId}", JsonOptions);
+        var messages = await client.GetFromJsonAsync<List<ProviderMessageDto>>($"/api/channels/{channelId}/messages/recent?providerResourceId={resourceId}", JsonOptions);
+        var summary = await client.GetFromJsonAsync<StatsSummaryDto>($"/api/channels/{channelId}/stats/summary?providerResourceId={resourceId}", JsonOptions);
+
+        Assert.Equal(sessionId, stats!.StreamSessionId);
+        Assert.Equal(12, stats.Likes);
+        Assert.Equal(44, stats.ConcurrentViewers);
+        Assert.Single(events!);
+        Assert.Single(messages!);
+        Assert.Equal(1, summary!.EventCount);
+    }
+
+    [Fact]
     public async Task WidgetData_IncludesStoredContentAndRecentComments()
     {
         await using var factory = new TestWebApplicationFactory();
@@ -339,6 +405,7 @@ public sealed class EndpointIntegrationTests
         Assert.NotNull(alert.StreamEventId);
         Assert.Equal(alert.Id, Assert.Single(trace!).AlertId);
         Assert.Equal(alert.Id, Assert.Single(widget!.Alerts).Id);
+        Assert.Equal("shortest-first", widget.Settings.QueueOrdering);
 
         using var ack = await client.PostAsync($"/api/channels/{channelId}/alerts/{alert.Id}/ack", null);
         Assert.Equal(HttpStatusCode.NoContent, ack.StatusCode);
@@ -618,6 +685,57 @@ public sealed class EndpointIntegrationTests
         var stats = Assert.Single(widgets!, x => x.WidgetKey == "stats");
         Assert.Equal("light", stats.Theme);
         Assert.Equal("{\"compact\":true}", stats.SettingsJson);
+    }
+
+    [Fact]
+    public async Task ConfigAlertWidgetSettings_SavesTypedSettings()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.PutAsJsonAsync("/api/config/widgets/alerts", new AlertWidgetSettingsDto(
+            "minimal",
+            "oldest-first",
+            1500,
+            12000,
+            "/widgets/assets/ping.mp3",
+            "https://cdn.example.test/alert.png",
+            "none",
+            0.35m,
+            false), JsonOptions);
+
+        response.EnsureSuccessStatusCode();
+        var settings = await client.GetFromJsonAsync<AlertWidgetSettingsDto>("/api/config/widgets/alerts", JsonOptions);
+
+        Assert.Equal("minimal", settings!.Theme);
+        Assert.Equal("oldest-first", settings.QueueOrdering);
+        Assert.Equal(1500, settings.MinDurationMs);
+        Assert.Equal(12000, settings.MaxDurationMs);
+        Assert.Equal("/widgets/assets/ping.mp3", settings.DefaultSoundUrl);
+        Assert.Equal("https://cdn.example.test/alert.png", settings.DefaultMediaUrl);
+        Assert.Equal("none", settings.AnimationPreset);
+        Assert.Equal(0.35m, settings.Volume);
+        Assert.False(settings.AutoAck);
+    }
+
+    [Fact]
+    public async Task ConfigAlertWidgetSettings_RejectsInvalidVolume()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.PutAsJsonAsync("/api/config/widgets/alerts", new AlertWidgetSettingsDto(
+            "default",
+            "shortest-first",
+            1000,
+            6000,
+            null,
+            null,
+            "sparkles",
+            2m,
+            true), JsonOptions);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

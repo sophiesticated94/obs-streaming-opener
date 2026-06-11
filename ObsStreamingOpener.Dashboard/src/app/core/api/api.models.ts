@@ -77,6 +77,18 @@ export interface WidgetConfigurationDto {
   updatedAt: string;
 }
 
+export interface AlertWidgetSettingsDto {
+  theme: string;
+  queueOrdering: 'shortest-first' | 'oldest-first' | string;
+  minDurationMs: number;
+  maxDurationMs: number;
+  defaultSoundUrl: string | null;
+  defaultMediaUrl: string | null;
+  animationPreset: string;
+  volume: number;
+  autoAck: boolean;
+}
+
 export interface RevenueCurrencySummaryDto {
   currency: string;
   gross: number;
@@ -149,13 +161,27 @@ export interface PollingConfigurationDto {
 }
 
 export interface CurrentStatsDto {
-  monitoredChannelId: string | null;
-  concurrentViewers: number | null;
-  likes: number | null;
-  chatMessagesPerMinute: number | null;
+  monitoredChannelId: string;
+  channelDisplayName: string;
+  streamSessionId: string | null;
+  streamTitle: string | null;
+  concurrentViewers: number;
+  likes: number;
+  chatMessagesPerMinute: number;
   tipTotal: number;
-  audienceMemberCount: number | null;
-  paidAudienceMemberCount: number | null;
+  audienceMemberCount: number;
+  paidAudienceMemberCount: number;
+  lastUpdatedAt: string | null;
+}
+
+export interface StatsSummaryDto {
+  from: string;
+  to: string;
+  peakViewers: number;
+  averageViewers: number;
+  chatMessages: number;
+  tipTotal: number;
+  eventCount: number;
 }
 
 export interface StreamSessionDto {
@@ -201,11 +227,13 @@ export interface ProviderResourceDto {
   title: string | null;
   description: string | null;
   url: string | null;
+  thumbnailUrl: string | null;
   status: string | null;
   publishedAt: string | null;
   scheduledStartAt: string | null;
   actualStartAt: string | null;
   actualEndAt: string | null;
+  durationSeconds: number | null;
   lastSyncedAt: string;
   patchHistory: ProviderResourcePatchDto[];
 }
@@ -345,4 +373,17 @@ export interface AlertRuleDto {
   mediaUrl: string | null;
   soundUrl: string | null;
   updatedAtUtc: string;
+}
+
+export interface SaveAlertRuleRequest {
+  monitoredChannelId: string;
+  eventType: string;
+  enabled: boolean;
+  minimumAmount: number | null;
+  durationSeconds: number;
+  visualStyle: string;
+  titleTemplate: string | null;
+  messageTemplate: string | null;
+  mediaUrl: string | null;
+  soundUrl: string | null;
 }

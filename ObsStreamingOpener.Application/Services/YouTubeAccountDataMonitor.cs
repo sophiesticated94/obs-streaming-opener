@@ -53,7 +53,7 @@ public sealed class YouTubeAccountDataMonitor(
                 ["uploadsPlaylistId"] = summary.UploadsPlaylistId
             });
 
-            await resourceStore.UpsertResourceAsync(ToResource(connection.MonitoredChannelId, ProviderResourceKind.Channel, summary.ChannelId, summary.DisplayName, null, summary.Url, summary.Status, null, null, null, null, payload), cancellationToken);
+            await resourceStore.UpsertResourceAsync(ToResource(connection.MonitoredChannelId, ProviderResourceKind.Channel, summary.ChannelId, summary.DisplayName, null, summary.Url, null, summary.Status, null, null, null, null, null, payload), cancellationToken);
             await StoreMetricIfPresentAsync(connection, null, MetricKind.AudienceMemberCount, summary.AudienceMemberCount, "members", payload, cancellationToken);
             await StoreMetricIfPresentAsync(connection, null, MetricKind.TotalViews, summary.TotalViews, "views", payload, cancellationToken);
             await StoreMetricIfPresentAsync(connection, null, MetricKind.VideoCount, summary.VideoCount, "videos", payload, cancellationToken);
@@ -388,15 +388,19 @@ public sealed class YouTubeAccountDataMonitor(
             item.Title,
             item.Description,
             item.Url,
+            item.ThumbnailUrl,
             item.Status,
             item.PublishedAt,
             item.ScheduledStartAt,
             item.ActualStartAt,
             item.ActualEndAt,
+            item.DurationSeconds,
             SummaryJson("youtube.resource", item.Id, item.ResourceKind.ToString(), item.Status, null, new Dictionary<string, string?>
             {
                 ["title"] = item.Title,
                 ["url"] = item.Url,
+                ["thumbnailUrl"] = item.ThumbnailUrl,
+                ["durationSeconds"] = item.DurationSeconds?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["liveChatId"] = item.LiveChatId,
                 ["boundStreamId"] = item.BoundStreamId
             })), cancellationToken);
@@ -470,9 +474,14 @@ public sealed class YouTubeAccountDataMonitor(
 
     private async Task StoreMetricIfPresentAsync(ProviderConnectionDto connection, Guid? resourceId, MetricKind metric, decimal value, string unit, string rawPayloadJson, CancellationToken cancellationToken)
     {
+        var streamSessionId = resourceId.HasValue
+            ? (await streamSessionStore.GetSessionByProviderResourceAsync(connection.MonitoredChannelId, resourceId.Value, cancellationToken))?.Id
+            : null;
+
         await statsStore.AddMetricSnapshotIfChangedAsync(new MetricSnapshot
         {
             MonitoredChannelId = connection.MonitoredChannelId,
+            StreamSessionId = streamSessionId,
             ProviderConnectionId = connection.Id,
             ProviderResourceId = resourceId,
             Provider = ProviderKind.YouTube,
@@ -492,11 +501,13 @@ public sealed class YouTubeAccountDataMonitor(
         string? title,
         string? description,
         string? url,
+        string? thumbnailUrl,
         string? status,
         DateTimeOffset? publishedAt,
         DateTimeOffset? scheduledStartAt,
         DateTimeOffset? actualStartAt,
         DateTimeOffset? actualEndAt,
+        int? durationSeconds,
         string? rawPayloadJson)
         => new(
             monitoredChannelId,
@@ -506,11 +517,13 @@ public sealed class YouTubeAccountDataMonitor(
             title,
             description,
             url,
+            thumbnailUrl,
             status,
             publishedAt,
             scheduledStartAt,
             actualStartAt,
             actualEndAt,
+            durationSeconds,
             rawPayloadJson);
 
     private static string SummaryJson(

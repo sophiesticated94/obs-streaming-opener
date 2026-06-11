@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import {
   ConnectedAccountDto,
   CurrentStatsDto,
+  AlertWidgetSettingsDto,
   AlertRuleDto,
   ManualAlertRequest,
   MonitoredAccountDto,
@@ -21,9 +22,11 @@ import {
   StreamEventAlertTraceDto,
   StreamSessionDto,
   SaveAccountRequest,
+  SaveAlertRuleRequest,
   SaveChannelSettingsRequest,
   SaveProviderConnectionRequest,
   SaveWidgetConfigurationRequest,
+  StatsSummaryDto,
   WidgetConfigurationDto,
   YouTubeAuthorizationUrlDto,
   AudienceActivityDto,
@@ -83,6 +86,14 @@ export class DashboardApiService {
     return this.http.put<WidgetConfigurationDto>('/api/config/widgets', request);
   }
 
+  getAlertWidgetSettings() {
+    return this.http.get<AlertWidgetSettingsDto>('/api/config/widgets/alerts');
+  }
+
+  upsertAlertWidgetSettings(request: AlertWidgetSettingsDto) {
+    return this.http.put<AlertWidgetSettingsDto>('/api/config/widgets/alerts', request);
+  }
+
   getPolling() {
     return this.http.get<PollingConfigurationDto>('/api/config/polling');
   }
@@ -117,11 +128,19 @@ export class DashboardApiService {
   }
 
   getCurrentStream(channelId: string) {
-    return this.http.get<StreamSessionDto>(`/api/channels/${channelId}/stream/current`);
+    return this.http.get<StreamSessionDto | null>(`/api/channels/${channelId}/stream/current`);
   }
 
-  getChannelStats(channelId: string) {
-    return this.http.get<CurrentStatsDto>(`/api/channels/${channelId}/stats/current`);
+  getChannelStats(channelId: string, filters: DashboardFilters = {}) {
+    const params = this.toParams({ ...filters });
+    const query = params ? `?${params}` : '';
+    return this.http.get<CurrentStatsDto>(`/api/channels/${channelId}/stats/current${query}`);
+  }
+
+  getChannelStatsSummary(channelId: string, filters: DashboardFilters = {}) {
+    const params = this.toParams({ ...filters });
+    const query = params ? `?${params}` : '';
+    return this.http.get<StatsSummaryDto>(`/api/channels/${channelId}/stats/summary${query}`);
   }
 
   getChannelRecentEvents(channelId: string, limit = 12, filters: DashboardFilters = {}) {
@@ -165,10 +184,15 @@ export class DashboardApiService {
     return this.http.get<StreamAlertDto[]>(`/api/channels/${channelId}/alerts/recent?${params}`);
   }
 
-  getEventAlertTrace(channelId: string, streamSessionId?: string, limit = 50) {
+  getEventAlertTrace(channelId: string, streamSessionId?: string, limit = 50, filters: DashboardFilters = {}) {
     const params = new URLSearchParams({ limit: String(limit) });
     if (streamSessionId) {
       params.set('streamSessionId', streamSessionId);
+    }
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== null && value !== undefined && value !== '') {
+        params.set(key, String(value));
+      }
     }
 
     return this.http.get<StreamEventAlertTraceDto[]>(`/api/channels/${channelId}/events/alert-trace?${params}`);
@@ -193,6 +217,10 @@ export class DashboardApiService {
   getAlertRules(channelId?: string) {
     const query = channelId ? `?channelId=${channelId}` : '';
     return this.http.get<AlertRuleDto[]>(`/api/config/alert-rules${query}`);
+  }
+
+  upsertAlertRule(request: SaveAlertRuleRequest) {
+    return this.http.put<AlertRuleDto>('/api/config/alert-rules', request);
   }
 
   getRevenueSummary() {

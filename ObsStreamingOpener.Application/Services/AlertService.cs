@@ -10,6 +10,7 @@ public sealed class AlertService(
     IStreamAlertStore alertStore,
     IStreamSessionStore sessionStore,
     IClock clock,
+    IConfigurationService? configurationService = null,
     IAlertPublisher? alertPublisher = null) : IAlertService
 {
     public async Task CreateAlertForEventAsync(StreamEvent streamEvent, IngestedEventResult result, CancellationToken cancellationToken = default)
@@ -122,6 +123,9 @@ public sealed class AlertService(
     public Task<IReadOnlyList<StreamEventAlertTraceDto>> GetEventAlertTraceAsync(Guid monitoredChannelId, Guid? streamSessionId, int limit, CancellationToken cancellationToken = default)
         => alertStore.GetEventAlertTraceAsync(monitoredChannelId, streamSessionId, limit, cancellationToken);
 
+    public Task<IReadOnlyList<StreamEventAlertTraceDto>> GetEventAlertTraceAsync(Guid monitoredChannelId, Guid? streamSessionId, Guid? providerResourceId, int limit, CancellationToken cancellationToken = default)
+        => alertStore.GetEventAlertTraceAsync(monitoredChannelId, streamSessionId, providerResourceId, limit, cancellationToken);
+
     public async Task<AlertWidgetDataDto> GetWidgetDataAsync(Guid monitoredChannelId, Guid? streamSessionId, CancellationToken cancellationToken = default)
     {
         var currentSessionId = streamSessionId ?? (await sessionStore.GetCurrentSessionAsync(monitoredChannelId, cancellationToken))?.Id;
@@ -132,7 +136,10 @@ public sealed class AlertService(
             now.AddMinutes(-5),
             now.AddMinutes(5),
             cancellationToken);
-        return new AlertWidgetDataDto(monitoredChannelId, currentSessionId, now, alerts);
+        var settings = configurationService is null
+            ? new AlertWidgetSettingsDto("default", "shortest-first", 1000, 60000, null, null, "sparkles", 0.8m, true)
+            : await configurationService.GetAlertWidgetSettingsAsync(cancellationToken);
+        return new AlertWidgetDataDto(monitoredChannelId, currentSessionId, now, alerts, settings);
     }
 
     private static AlertRuleDto? GetDefaultRule(Guid channelId, StreamEventType eventType)

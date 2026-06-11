@@ -55,7 +55,7 @@ public sealed class ChannelsController(
         }
 
         var stream = await statsStore.GetCurrentStreamAsync(channelId, cancellationToken);
-        return stream is null ? NotFound() : Ok(stream);
+        return new JsonResult(stream);
     }
 
     [HttpGet("{channelId:guid}/alerts/active")]
@@ -67,8 +67,13 @@ public sealed class ChannelsController(
         => Ok(await alertService.GetRecentAlertsAsync(channelId, streamSessionId, limit, cancellationToken));
 
     [HttpGet("{channelId:guid}/events/alert-trace")]
-    public async Task<IActionResult> GetEventAlertTrace(Guid channelId, [FromQuery] Guid? streamSessionId, [FromQuery] int limit = 50, CancellationToken cancellationToken = default)
-        => Ok(await alertService.GetEventAlertTraceAsync(channelId, streamSessionId, limit, cancellationToken));
+    public async Task<IActionResult> GetEventAlertTrace(
+        Guid channelId,
+        [FromQuery] Guid? streamSessionId,
+        [FromQuery] Guid? providerResourceId,
+        [FromQuery] int limit = 50,
+        CancellationToken cancellationToken = default)
+        => Ok(await alertService.GetEventAlertTraceAsync(channelId, streamSessionId, providerResourceId, limit, cancellationToken));
 
     [HttpPost("{channelId:guid}/alerts/manual")]
     public async Task<IActionResult> CreateManualAlert(Guid channelId, [FromBody] ManualAlertRequest request, CancellationToken cancellationToken = default)
@@ -92,8 +97,12 @@ public sealed class ChannelsController(
         => await alertService.AcknowledgeAlertAsync(channelId, alertId, cancellationToken) ? NoContent() : NotFound();
 
     [HttpGet("{channelId:guid}/stats/current")]
-    public async Task<IActionResult> GetCurrentStats(Guid channelId, CancellationToken cancellationToken)
-        => Ok(await statsQueryService.GetCurrentStatsAsync(channelId, cancellationToken));
+    public async Task<IActionResult> GetCurrentStats(
+        Guid channelId,
+        [FromQuery] Guid? providerResourceId,
+        [FromQuery] Guid? streamSessionId,
+        CancellationToken cancellationToken)
+        => Ok(await statsQueryService.GetCurrentStatsAsync(channelId, providerResourceId, streamSessionId, cancellationToken));
 
     [HttpGet("{channelId:guid}/stats/summary")]
     public async Task<IActionResult> GetStatsSummary(

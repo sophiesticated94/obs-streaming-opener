@@ -25,7 +25,8 @@ public interface IIntegrationTestDataSeeder
         MonitoredChannel channel,
         string title = "Test stream",
         bool isActive = true,
-        DateTimeOffset? startedAt = null);
+        DateTimeOffset? startedAt = null,
+        ProviderResource? providerResource = null);
 
     Task<StreamEvent> CreateEventAsync(
         MonitoredChannel channel,
@@ -38,6 +39,7 @@ public interface IIntegrationTestDataSeeder
         string? currency = null,
         StreamSession? streamSession = null,
         AudienceMember? audienceMember = null,
+        ProviderResource? providerResource = null,
         DateTimeOffset? occurredAt = null);
 
     Task<MetricSnapshot> CreateMetricSnapshotAsync(
@@ -48,6 +50,7 @@ public interface IIntegrationTestDataSeeder
         SnapshotReason snapshotReason = SnapshotReason.Manual,
         StreamSession? streamSession = null,
         ProviderConnection? providerConnection = null,
+        ProviderResource? providerResource = null,
         DateTimeOffset? capturedAt = null);
 
     Task<ProviderResource> CreateProviderResourceAsync(
@@ -58,7 +61,9 @@ public interface IIntegrationTestDataSeeder
         ProviderKind provider = ProviderKind.YouTube,
         DateTimeOffset? publishedAt = null,
         DateTimeOffset? scheduledStartAt = null,
-        string? status = null);
+        string? status = null,
+        string? thumbnailUrl = null,
+        int? durationSeconds = null);
 
     Task<ProviderMessage> CreateProviderMessageAsync(
         MonitoredChannel channel,
@@ -66,6 +71,8 @@ public interface IIntegrationTestDataSeeder
         string externalMessageId = "test-message",
         string? authorName = "Test viewer",
         string? messageText = "Hello from test",
+        StreamSession? streamSession = null,
+        ProviderResource? providerResource = null,
         DateTimeOffset? publishedAt = null);
 
     Task<(AudienceMember AudienceMember, AudienceRelationshipPeriod Relationship)> CreateAudienceRelationshipAsync(

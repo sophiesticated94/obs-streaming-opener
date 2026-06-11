@@ -46,7 +46,7 @@ import { StatusBannerComponent } from '../../shared/components/status-banner.com
               <h2>Audience activity</h2>
               <p>{{ value.revenue.latestCurrencyTotal ?? 0 }} {{ value.revenue.latestCurrency || '' }}</p>
             </div>
-            <a class="button secondary" [routerLink]="['/activity']" [queryParams]="{ channelId: selectedChannelId(), audienceMemberId: value.audienceMemberId }">Open filtered activity</a>
+            <a class="button secondary" [routerLink]="['/content']" [queryParams]="{ channelId: selectedChannelId(), audienceMemberId: value.audienceMemberId }">Open filtered resources</a>
           </div>
           <h3>Relationships</h3>
           <div class="list compact">

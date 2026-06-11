@@ -19,10 +19,10 @@ import { StatusBannerComponent } from '../../shared/components/status-banner.com
         <h2>Current Stats</h2>
         @if (stats(); as value) {
           <dl class="stats-list">
-            <div><dt>Viewers</dt><dd>{{ value.concurrentViewers ?? 0 }}</dd></div>
-            <div><dt>Likes</dt><dd>{{ value.likes ?? 0 }}</dd></div>
+            <div><dt>Viewers</dt><dd>{{ value.concurrentViewers }}</dd></div>
+            <div><dt>Likes</dt><dd>{{ value.likes }}</dd></div>
             <div><dt>Tips</dt><dd>{{ value.tipTotal }}</dd></div>
-            <div><dt>Audience</dt><dd>{{ value.audienceMemberCount ?? 0 }}</dd></div>
+            <div><dt>Audience</dt><dd>{{ value.audienceMemberCount }}</dd></div>
           </dl>
         }
       </article>

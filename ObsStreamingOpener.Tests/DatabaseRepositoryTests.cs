@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.Json;
 using ObsStreamingOpener.Application.Contracts;
 using ObsStreamingOpener.Application.Dto;
 using ObsStreamingOpener.Application.Services;
@@ -522,11 +523,13 @@ public sealed class DatabaseRepositoryTests
             "First title",
             null,
             "https://youtube.test/watch?v=video-123",
+            "https://img.youtube.test/video-123.jpg",
             "public",
             fixture.Clock.UtcNow.AddDays(-1),
             null,
             null,
             null,
+            3600,
             "{}"));
 
         var broadcast = await fixture.Repository.UpsertResourceAsync(new ProviderResourceUpsert(
@@ -537,11 +540,13 @@ public sealed class DatabaseRepositoryTests
             "Updated title",
             null,
             "https://youtube.test/watch?v=video-123",
+            "https://img.youtube.test/video-123-updated.jpg",
             "complete",
             fixture.Clock.UtcNow.AddDays(-1),
             fixture.Clock.UtcNow.AddHours(-2),
             fixture.Clock.UtcNow.AddHours(-1),
             fixture.Clock.UtcNow,
+            3700,
             "{}"));
 
         Assert.Equal(video.Id, broadcast.Id);
@@ -549,6 +554,8 @@ public sealed class DatabaseRepositoryTests
         Assert.Contains(ProviderResourceKind.Video, broadcast.ObservedKinds);
         Assert.Contains(ProviderResourceKind.LiveBroadcast, broadcast.ObservedKinds);
         Assert.Contains(broadcast.PatchHistory.SelectMany(x => x.Fields), x => x.Field == nameof(ProviderResource.Title));
+        Assert.Contains(broadcast.PatchHistory.SelectMany(x => x.Fields), x => x.Field == nameof(ProviderResource.ThumbnailUrl));
+        Assert.Contains(broadcast.PatchHistory.SelectMany(x => x.Fields), x => x.Field == nameof(ProviderResource.DurationSeconds));
         Assert.Single(await fixture.DbContext.ProviderResources.Where(x => x.ExternalResourceId == "video-123").ToListAsync());
     }
 
@@ -565,8 +572,10 @@ public sealed class DatabaseRepositoryTests
             "Stable title",
             null,
             null,
+            null,
             "public",
             fixture.Clock.UtcNow,
+            null,
             null,
             null,
             null,
@@ -576,6 +585,40 @@ public sealed class DatabaseRepositoryTests
         var second = await fixture.Repository.UpsertResourceAsync(upsert);
 
         Assert.Equal(first.PatchHistory.Count, second.PatchHistory.Count);
+    }
+
+    [Fact]
+    public async Task UpsertResource_CompactsExistingDuplicatePatchHistory()
+    {
+        await using var fixture = await RepositoryFixture.CreateAsync();
+        var channel = await fixture.Repository.GetDefaultChannelEntityAsync();
+        var upsert = new ProviderResourceUpsert(
+            channel.Id,
+            ProviderKind.YouTube,
+            ProviderResourceKind.Video,
+            "duplicate-history-video",
+            " Stable title ",
+            null,
+            null,
+            null,
+            "public",
+            fixture.Clock.UtcNow,
+            null,
+            null,
+            null,
+            null,
+            "{}");
+
+        var first = await fixture.Repository.UpsertResourceAsync(upsert);
+        var duplicatedHistory = new[] { first.PatchHistory[0], first.PatchHistory[0] };
+        var entity = await fixture.DbContext.ProviderResources.SingleAsync(x => x.Id == first.Id);
+        entity.PatchHistoryJson = JsonSerializer.Serialize(duplicatedHistory);
+        await fixture.DbContext.SaveChangesAsync();
+
+        var compacted = await fixture.Repository.UpsertResourceAsync(upsert with { Title = "Stable title" });
+
+        Assert.Single(compacted.PatchHistory);
+        Assert.Single(JsonSerializer.Deserialize<List<ProviderResourcePatchDto>>(entity.PatchHistoryJson!)!);
     }
 
     private sealed class RepositoryFixture : IAsyncDisposable
@@ -647,6 +690,8 @@ public sealed class DatabaseRepositoryTests
                     "video-1",
                     ProviderResourceKind.Video,
                     "Live",
+                    null,
+                    null,
                     null,
                     null,
                     null,

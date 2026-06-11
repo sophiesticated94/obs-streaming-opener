@@ -11,7 +11,14 @@ public sealed class StatsQueryService(
     IProviderResourceStore resourceStore,
     IClock clock) : IStatsQueryService
 {
-    public async Task<CurrentStatsDto> GetCurrentStatsAsync(Guid? monitoredChannelId = null, CancellationToken cancellationToken = default)
+    public Task<CurrentStatsDto> GetCurrentStatsAsync(Guid? monitoredChannelId = null, CancellationToken cancellationToken = default)
+        => GetCurrentStatsAsync(monitoredChannelId, null, null, cancellationToken);
+
+    public async Task<CurrentStatsDto> GetCurrentStatsAsync(
+        Guid? monitoredChannelId,
+        Guid? providerResourceId,
+        Guid? streamSessionId,
+        CancellationToken cancellationToken = default)
     {
         var channel = monitoredChannelId.HasValue
             ? await channelStore.GetChannelAsync(monitoredChannelId.Value, cancellationToken)
@@ -23,12 +30,16 @@ public sealed class StatsQueryService(
         }
 
         var currentStream = await statsStore.GetCurrentStreamAsync(channel.Id, cancellationToken);
-        var viewers = await statsStore.GetLatestMetricAsync(channel.Id, MetricKind.ConcurrentViewers, cancellationToken);
-        var likes = await statsStore.GetLatestMetricAsync(channel.Id, MetricKind.Likes, cancellationToken);
-        var chatRate = await statsStore.GetLatestMetricAsync(channel.Id, MetricKind.ChatMessagesPerMinute, cancellationToken);
-        var tipTotal = await statsStore.GetLatestMetricAsync(channel.Id, MetricKind.TipTotal, cancellationToken);
-        var audience = await statsStore.GetLatestMetricAsync(channel.Id, MetricKind.AudienceMemberCount, cancellationToken);
-        var paidAudience = await statsStore.GetLatestMetricAsync(channel.Id, MetricKind.PaidAudienceMemberCount, cancellationToken);
+        var viewers = await statsStore.GetLatestMetricAsync(channel.Id, MetricKind.ConcurrentViewers, providerResourceId, streamSessionId, cancellationToken);
+        var likes = await statsStore.GetLatestMetricAsync(channel.Id, MetricKind.Likes, providerResourceId, streamSessionId, cancellationToken);
+        var chatRate = await statsStore.GetLatestMetricAsync(channel.Id, MetricKind.ChatMessagesPerMinute, providerResourceId, streamSessionId, cancellationToken);
+        var tipTotal = await statsStore.GetLatestMetricAsync(channel.Id, MetricKind.TipTotal, providerResourceId, streamSessionId, cancellationToken);
+        var audience = await statsStore.GetLatestMetricAsync(channel.Id, MetricKind.AudienceMemberCount, providerResourceId, streamSessionId, cancellationToken);
+        var paidAudience = await statsStore.GetLatestMetricAsync(channel.Id, MetricKind.PaidAudienceMemberCount, providerResourceId, streamSessionId, cancellationToken);
+        var scopedMetrics = new[] { viewers, likes, chatRate, tipTotal, audience, paidAudience };
+        var resolvedStreamSessionId = streamSessionId
+            ?? scopedMetrics.FirstOrDefault(x => x?.StreamSessionId is not null)?.StreamSessionId
+            ?? (providerResourceId.HasValue ? null : currentStream?.Id);
         var lastUpdated = new[] { viewers?.CapturedAt, likes?.CapturedAt, chatRate?.CapturedAt, tipTotal?.CapturedAt, audience?.CapturedAt, paidAudience?.CapturedAt }
             .Where(x => x.HasValue)
             .Max();
@@ -36,8 +47,8 @@ public sealed class StatsQueryService(
         return new CurrentStatsDto(
             channel.Id,
             channel.DisplayName,
-            currentStream?.Id,
-            currentStream?.Title,
+            resolvedStreamSessionId,
+            resolvedStreamSessionId == currentStream?.Id ? currentStream?.Title : null,
             viewers?.Value ?? 0,
             likes?.Value ?? 0,
             chatRate?.Value ?? 0,

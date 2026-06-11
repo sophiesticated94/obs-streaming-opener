@@ -14,6 +14,7 @@ public static class DependencyInjection
 
         services.AddDbContext<StreamingOpenerDbContext>(options => options.UseSqlite(connectionString));
         services.AddScoped<DatabaseInitializer>();
+        services.AddSingleton<IProviderResourcePatchService, ProviderResourcePatchService>();
         services.AddScoped<StreamingOpenerRepository>();
         services.AddScoped<IChannelStore>(sp => sp.GetRequiredService<StreamingOpenerRepository>());
         services.AddScoped<IEventStore>(sp => sp.GetRequiredService<StreamingOpenerRepository>());

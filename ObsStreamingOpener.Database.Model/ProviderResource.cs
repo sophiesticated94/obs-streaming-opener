@@ -31,6 +31,9 @@ public sealed class ProviderResource
     [MaxLength(1024)]
     public string? Url { get; set; }
 
+    [MaxLength(1024)]
+    public string? ThumbnailUrl { get; set; }
+
     [MaxLength(128)]
     public string? Status { get; set; }
 
@@ -41,6 +44,8 @@ public sealed class ProviderResource
     public DateTimeOffset? ActualStartAt { get; set; }
 
     public DateTimeOffset? ActualEndAt { get; set; }
+
+    public int? DurationSeconds { get; set; }
 
     public DateTimeOffset LastSyncedAt { get; set; } = DateTimeOffset.UtcNow;
 

@@ -81,4 +81,5 @@ public sealed record AlertWidgetDataDto(
     Guid MonitoredChannelId,
     Guid? StreamSessionId,
     DateTimeOffset RefreshedAt,
-    IReadOnlyList<StreamAlertDto> Alerts);
+    IReadOnlyList<StreamAlertDto> Alerts,
+    AlertWidgetSettingsDto Settings);

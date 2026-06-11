@@ -137,6 +137,49 @@ public sealed class ExternalHttpClientTests
         Assert.DoesNotContain("secret-api-key", ex.RequestUri);
     }
 
+    [Fact]
+    public async Task YouTubeApiClient_GetVideosAsync_ParsesThumbnailAndDuration()
+    {
+        var externalClient = CreateClient(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """
+                {
+                  "items": [
+                    {
+                      "id": "video-1",
+                      "snippet": {
+                        "title": "Parsed video",
+                        "description": "Desc",
+                        "publishedAt": "2026-06-10T10:00:00Z",
+                        "thumbnails": {
+                          "default": { "url": "https://img.youtube.test/default.jpg" },
+                          "high": { "url": "https://img.youtube.test/high.jpg" }
+                        }
+                      },
+                      "contentDetails": { "duration": "PT1H2M3S" },
+                      "statistics": { "viewCount": "100", "likeCount": "12", "commentCount": "3" },
+                      "status": { "privacyStatus": "public" }
+                    }
+                  ]
+                }
+                """,
+                Encoding.UTF8,
+                "application/json")
+        });
+        var client = new YouTubeApiClient(
+            externalClient,
+            Options.Create(new YouTubeOptions { BaseUrl = "https://www.googleapis.com/youtube/v3/" }),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<YouTubeApiClient>.Instance);
+
+        var item = Assert.Single(await client.GetVideosAsync(["video-1"], "access-token"));
+
+        Assert.Equal("https://img.youtube.test/high.jpg", item.ThumbnailUrl);
+        Assert.Equal(3723, item.DurationSeconds);
+        Assert.Equal(12, item.LikeCount);
+        Assert.Equal(3, item.CommentCount);
+    }
+
     private static ExternalHttpClient CreateClient(HttpResponseMessage response)
         => new(new HttpClient(new RecordingHandler(response)));
 

@@ -28,6 +28,10 @@ public interface IConfigurationService
 
     Task<WidgetConfigurationDto> UpsertWidgetConfigurationAsync(SaveWidgetConfigurationRequest request, CancellationToken cancellationToken = default);
 
+    Task<AlertWidgetSettingsDto> GetAlertWidgetSettingsAsync(CancellationToken cancellationToken = default);
+
+    Task<AlertWidgetSettingsDto> UpsertAlertWidgetSettingsAsync(AlertWidgetSettingsDto request, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AlertRuleDto>> GetAlertRulesAsync(Guid? monitoredChannelId = null, CancellationToken cancellationToken = default);
 
     Task<AlertRuleDto> UpsertAlertRuleAsync(SaveAlertRuleRequest request, CancellationToken cancellationToken = default);

@@ -41,6 +41,17 @@ public sealed record WidgetConfigurationDto(
     string SettingsJson,
     DateTimeOffset UpdatedAt);
 
+public sealed record AlertWidgetSettingsDto(
+    string Theme,
+    string QueueOrdering,
+    int MinDurationMs,
+    int MaxDurationMs,
+    string? DefaultSoundUrl,
+    string? DefaultMediaUrl,
+    string AnimationPreset,
+    decimal Volume,
+    bool AutoAck);
+
 public sealed record PollingConfigurationDto(
     bool EnableStreamDataPolling,
     int StreamDataPollingSeconds,

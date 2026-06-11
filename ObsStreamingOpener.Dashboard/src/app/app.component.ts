@@ -20,7 +20,6 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
           <a routerLink="/channels" routerLinkActive="active">Channels</a>
           <a routerLink="/content" routerLinkActive="active">Content</a>
           <a routerLink="/audience" routerLinkActive="active">Audience</a>
-          <a routerLink="/activity" routerLinkActive="active">Activity</a>
           <a routerLink="/alerts" routerLinkActive="active">Alerts</a>
           <a routerLink="/revenue" routerLinkActive="active">Revenue</a>
           <a routerLink="/widgets" routerLinkActive="active">Widgets</a>

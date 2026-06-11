@@ -15,4 +15,7 @@ public interface IStreamSessionStore
         => Task.CompletedTask;
 
     Task<StreamSessionDto?> GetCurrentSessionAsync(Guid monitoredChannelId, CancellationToken cancellationToken = default);
+
+    Task<StreamSessionDto?> GetSessionByProviderResourceAsync(Guid monitoredChannelId, Guid providerResourceId, CancellationToken cancellationToken = default)
+        => Task.FromResult<StreamSessionDto?>(null);
 }

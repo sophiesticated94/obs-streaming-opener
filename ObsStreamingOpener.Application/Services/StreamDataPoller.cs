@@ -105,6 +105,7 @@ public sealed class StreamDataPoller(
             MonitoredChannelId = connection.MonitoredChannelId,
             StreamSessionId = currentSession.Id,
             ProviderConnectionId = connection.Id,
+            ProviderResourceId = currentSession.ProviderResourceId,
             Provider = ProviderKind.YouTube,
             Metric = metric,
             SnapshotReason = SnapshotReason.ScheduledPoll,

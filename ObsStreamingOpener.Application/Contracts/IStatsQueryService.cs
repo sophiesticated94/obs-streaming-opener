@@ -6,6 +6,13 @@ public interface IStatsQueryService
 {
     Task<CurrentStatsDto> GetCurrentStatsAsync(Guid? monitoredChannelId = null, CancellationToken cancellationToken = default);
 
+    Task<CurrentStatsDto> GetCurrentStatsAsync(
+        Guid? monitoredChannelId,
+        Guid? providerResourceId,
+        Guid? streamSessionId,
+        CancellationToken cancellationToken = default)
+        => GetCurrentStatsAsync(monitoredChannelId, cancellationToken);
+
     Task<StatsSummaryDto> GetSummaryAsync(
         Guid? monitoredChannelId,
         DateTimeOffset? from,

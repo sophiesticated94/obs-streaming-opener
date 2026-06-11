@@ -19,6 +19,6 @@ public sealed class StreamsController(IStatsStore statsStore) : ControllerBase
         }
 
         var stream = await statsStore.GetCurrentStreamAsync(channel.Id, cancellationToken);
-        return stream is null ? NotFound() : Ok(stream);
+        return new JsonResult(stream);
     }
 }

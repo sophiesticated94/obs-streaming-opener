@@ -68,6 +68,14 @@ public sealed class ConfigController(IConfigurationService configurationService)
     public async Task<IActionResult> UpsertWidget([FromBody] SaveWidgetConfigurationRequest request, CancellationToken cancellationToken)
         => await ExecuteAsync(async () => Ok(await configurationService.UpsertWidgetConfigurationAsync(request, cancellationToken)));
 
+    [HttpGet("widgets/alerts")]
+    public async Task<IActionResult> GetAlertWidgetSettings(CancellationToken cancellationToken)
+        => Ok(await configurationService.GetAlertWidgetSettingsAsync(cancellationToken));
+
+    [HttpPut("widgets/alerts")]
+    public async Task<IActionResult> UpsertAlertWidgetSettings([FromBody] AlertWidgetSettingsDto request, CancellationToken cancellationToken)
+        => await ExecuteAsync(async () => Ok(await configurationService.UpsertAlertWidgetSettingsAsync(request, cancellationToken)));
+
     [HttpGet("alert-rules")]
     public async Task<IActionResult> GetAlertRules([FromQuery] Guid? channelId, CancellationToken cancellationToken)
         => Ok(await configurationService.GetAlertRulesAsync(channelId, cancellationToken));

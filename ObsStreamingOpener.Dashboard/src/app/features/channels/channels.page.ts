@@ -47,22 +47,21 @@ import { StatusBannerComponent } from '../../shared/components/status-banner.com
             <p>{{ channel.url || channel.externalChannelId }}</p>
           </div>
           <div class="actions">
-            <a class="button secondary" [routerLink]="['/content']" [queryParams]="{ channelId: channel.id }">Content</a>
+            <a class="button secondary" [routerLink]="['/content']" [queryParams]="{ channelId: channel.id }">Resources</a>
             <a class="button secondary" [routerLink]="['/audience']" [queryParams]="{ channelId: channel.id }">Audience</a>
-            <a class="button secondary" [routerLink]="['/activity']" [queryParams]="{ channelId: channel.id }">Activity</a>
           </div>
         </div>
 
         @if (stats(); as value) {
           <dl class="stats-list">
-            <button type="button" class="metric-tile" [routerLink]="['/activity']" [queryParams]="{ channelId: channel.id }">
-              <dt>Viewers</dt><dd>{{ value.concurrentViewers ?? 0 }}</dd>
+            <button type="button" class="metric-tile" [routerLink]="['/content']" [queryParams]="{ channelId: channel.id }">
+              <dt>Viewers</dt><dd>{{ value.concurrentViewers }}</dd>
             </button>
-            <button type="button" class="metric-tile" [routerLink]="['/activity']" [queryParams]="{ channelId: channel.id }">
-              <dt>Likes</dt><dd>{{ value.likes ?? 0 }}</dd>
+            <button type="button" class="metric-tile" [routerLink]="['/content']" [queryParams]="{ channelId: channel.id }">
+              <dt>Likes</dt><dd>{{ value.likes }}</dd>
             </button>
             <button type="button" class="metric-tile" [routerLink]="['/audience']" [queryParams]="{ channelId: channel.id }">
-              <dt>Audience</dt><dd>{{ value.audienceMemberCount ?? 0 }}</dd>
+              <dt>Audience</dt><dd>{{ value.audienceMemberCount }}</dd>
             </button>
             <button type="button" class="metric-tile" [routerLink]="['/revenue']">
               <dt>Tips</dt><dd>{{ value.tipTotal }}</dd>
