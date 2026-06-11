@@ -309,7 +309,7 @@ public sealed class EndpointIntegrationTests
     }
 
     [Fact]
-    public async Task WidgetData_IncludesStoredContentAndRecentComments()
+    public async Task GenericWidgetDataEndpoint_IsRemoved()
     {
         await using var factory = new TestWebApplicationFactory();
         using var client = factory.CreateClient();
@@ -325,11 +325,13 @@ public sealed class EndpointIntegrationTests
             await seeder.CreateEventAsync(channel, StreamEventType.CommentCreated, ProviderKind.YouTube, externalEventId: "widget-comment", message: "Widget comment");
         });
 
-        var widget = await client.GetFromJsonAsync<WidgetDataDto>($"/api/widgets/youtube-overview/data?channelId={channelId}", JsonOptions);
+        var response = await client.GetAsync($"/api/widgets/youtube-overview/data?channelId={channelId}");
+        var recentContent = await client.GetFromJsonAsync<List<ProviderResourceDto>>($"/api/channels/{channelId}/content/recent?limit=10", JsonOptions);
+        var recentComments = await client.GetFromJsonAsync<List<RecentEventDto>>($"/api/channels/{channelId}/events/recent?type=CommentCreated&limit=10", JsonOptions);
 
-        Assert.Contains(widget!.RecentContent!, x => x.Title == "Widget video");
-        Assert.Contains(widget.UpcomingContent!, x => x.Title == "Widget stream");
-        Assert.Contains(widget.RecentComments!, x => x.Message == "Widget comment");
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Contains(recentContent!, x => x.Title == "Widget video");
+        Assert.Contains(recentComments!, x => x.Message == "Widget comment");
     }
 
     [Fact]

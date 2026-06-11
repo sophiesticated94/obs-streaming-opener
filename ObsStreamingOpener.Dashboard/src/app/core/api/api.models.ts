@@ -146,6 +146,13 @@ export interface ProviderSyncResult {
   error: string | null;
 }
 
+export interface BrowserLoginResultDto {
+  provider: ProviderKind;
+  status: string;
+  message: string;
+  storageStatePath: string | null;
+}
+
 export interface SaveWidgetConfigurationRequest {
   widgetKey: string;
   widgetType: string;

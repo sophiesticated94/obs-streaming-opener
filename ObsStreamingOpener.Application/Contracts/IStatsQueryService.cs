@@ -20,6 +20,4 @@ public interface IStatsQueryService
         Guid? providerResourceId = null,
         Guid? streamSessionId = null,
         CancellationToken cancellationToken = default);
-
-    Task<WidgetDataDto> GetWidgetDataAsync(string widgetKey, Guid? monitoredChannelId = null, CancellationToken cancellationToken = default);
 }

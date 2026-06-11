@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<IStatsStore>(sp => sp.GetRequiredService<StreamingOpenerRepository>());
         services.AddScoped<IConfigurationStore>(sp => sp.GetRequiredService<StreamingOpenerRepository>());
         services.AddScoped<IProviderCredentialStore>(sp => sp.GetRequiredService<StreamingOpenerRepository>());
+        services.AddScoped<IProviderBrowserSessionStore>(sp => sp.GetRequiredService<StreamingOpenerRepository>());
         services.AddScoped<IProviderCursorStore>(sp => sp.GetRequiredService<StreamingOpenerRepository>());
         services.AddScoped<IProviderResourceStore>(sp => sp.GetRequiredService<StreamingOpenerRepository>());
         services.AddScoped<IProviderMessageStore>(sp => sp.GetRequiredService<StreamingOpenerRepository>());

@@ -235,7 +235,7 @@ public sealed class DatabaseRepositoryTests
             });
         await fixture.DbContext.SaveChangesAsync();
 
-        var service = new StatsQueryService(fixture.Repository, fixture.Repository, fixture.Repository, fixture.Repository, fixture.Clock);
+        var service = new StatsQueryService(fixture.Repository, fixture.Repository, fixture.Repository, fixture.Clock);
         var stats = await service.GetCurrentStatsAsync(channel.Id);
 
         Assert.Equal(channel.Id, stats.MonitoredChannelId);

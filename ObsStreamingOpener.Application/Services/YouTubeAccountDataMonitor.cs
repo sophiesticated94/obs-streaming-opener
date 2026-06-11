@@ -16,6 +16,9 @@ public sealed class YouTubeAccountDataMonitor(
     IStatsStore statsStore,
     IStreamSessionStore streamSessionStore,
     IEventIngestionService eventIngestionService,
+    IActivityPublisher activityPublisher,
+    IStatsQueryService statsQueryService,
+    IStatsPublisher statsPublisher,
     IAudienceIngestionService audienceIngestionService,
     IProviderEventIdentityService identityService,
     IYouTubeCredentialResolver credentialResolver,
@@ -315,9 +318,9 @@ public sealed class YouTubeAccountDataMonitor(
                 null,
                 payload);
             message = message with { IdentityKey = identityService.CreateMessageIdentityKey(message) };
-            await providerMessageStore.UpsertMessageAsync(message, cancellationToken);
+            var savedMessage = await providerMessageStore.UpsertMessageAsync(message, cancellationToken);
 
-            await eventIngestionService.IngestAsync(new ProviderEvent(
+            var eventResult = await eventIngestionService.IngestAsync(new ProviderEvent(
                 monitoredChannelId,
                 null,
                 null,
@@ -333,6 +336,11 @@ public sealed class YouTubeAccountDataMonitor(
                 null,
                 comment.PublishedAt ?? clock.UtcNow,
                 payload), cancellationToken);
+
+            if (eventResult.Stored && !eventResult.Duplicate)
+            {
+                await activityPublisher.PublishMessageCreatedAsync(savedMessage, cancellationToken);
+            }
         }
 
         await StoreMetricIfPresentAsync(connection, resource?.Id, MetricKind.CommentCount, (decimal)comments.Items.Count, "comments", comments.RawPayloadJson, cancellationToken);
@@ -478,7 +486,7 @@ public sealed class YouTubeAccountDataMonitor(
             ? (await streamSessionStore.GetSessionByProviderResourceAsync(connection.MonitoredChannelId, resourceId.Value, cancellationToken))?.Id
             : null;
 
-        await statsStore.AddMetricSnapshotIfChangedAsync(new MetricSnapshot
+        var snapshot = new MetricSnapshot
         {
             MonitoredChannelId = connection.MonitoredChannelId,
             StreamSessionId = streamSessionId,
@@ -491,7 +499,13 @@ public sealed class YouTubeAccountDataMonitor(
             Unit = unit,
             CapturedAt = clock.UtcNow,
             RawPayloadJson = rawPayloadJson
-        }, cancellationToken);
+        };
+
+        if (await statsStore.AddMetricSnapshotIfChangedAsync(snapshot, cancellationToken))
+        {
+            var currentStats = await statsQueryService.GetCurrentStatsAsync(connection.MonitoredChannelId, resourceId, streamSessionId, cancellationToken);
+            await statsPublisher.PublishCurrentStatsAsync(currentStats, cancellationToken);
+        }
     }
 
     private static ProviderResourceUpsert ToResource(

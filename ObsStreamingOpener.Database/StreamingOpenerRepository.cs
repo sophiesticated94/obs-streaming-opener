@@ -14,6 +14,7 @@ public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext
     IStatsStore,
     IConfigurationStore,
     IProviderCredentialStore,
+    IProviderBrowserSessionStore,
     IProviderCursorStore,
     IProviderResourceStore,
     IProviderMessageStore,
@@ -552,6 +553,87 @@ public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext
         credential.EncryptedAccessToken = null;
         credential.EncryptedRefreshToken = null;
         credential.DisconnectedAt = clock.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<ProviderBrowserSessionDto?> GetBrowserSessionAsync(ProviderKind provider, CancellationToken cancellationToken = default)
+    {
+        var session = await dbContext.ProviderBrowserSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Provider == provider, cancellationToken);
+        return session is null ? null : ToDto(session);
+    }
+
+    public async Task<ProviderBrowserSessionDto> UpsertBrowserSessionAsync(
+        ProviderKind provider,
+        string encryptedStorageStateJson,
+        string status,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await dbContext.ProviderBrowserSessions
+            .FirstOrDefaultAsync(x => x.Provider == provider, cancellationToken);
+        if (session is null)
+        {
+            session = new ProviderBrowserSession
+            {
+                Provider = provider,
+                CreatedAt = clock.UtcNow
+            };
+            dbContext.ProviderBrowserSessions.Add(session);
+        }
+
+        session.EncryptedStorageStateJson = encryptedStorageStateJson;
+        session.Status = status;
+        session.DisconnectedAt = null;
+        session.LastValidatedAt = clock.UtcNow;
+        session.UpdatedAt = clock.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToDto(session);
+    }
+
+    public async Task<ProviderBrowserSessionDto> MarkBrowserSessionStatusAsync(
+        ProviderKind provider,
+        string status,
+        string? encryptedStorageStateJson = null,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await dbContext.ProviderBrowserSessions
+            .FirstOrDefaultAsync(x => x.Provider == provider, cancellationToken);
+        if (session is null)
+        {
+            session = new ProviderBrowserSession
+            {
+                Provider = provider,
+                CreatedAt = clock.UtcNow
+            };
+            dbContext.ProviderBrowserSessions.Add(session);
+        }
+
+        if (encryptedStorageStateJson is not null)
+        {
+            session.EncryptedStorageStateJson = encryptedStorageStateJson;
+        }
+
+        session.Status = status;
+        session.UpdatedAt = clock.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToDto(session);
+    }
+
+    public async Task<bool> ClearBrowserSessionAsync(ProviderKind provider, CancellationToken cancellationToken = default)
+    {
+        var session = await dbContext.ProviderBrowserSessions
+            .FirstOrDefaultAsync(x => x.Provider == provider, cancellationToken);
+        if (session is null)
+        {
+            return false;
+        }
+
+        session.EncryptedStorageStateJson = null;
+        session.Status = "NeedsLogin";
+        session.DisconnectedAt = clock.UtcNow;
+        session.UpdatedAt = clock.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -1759,6 +1841,16 @@ public sealed class StreamingOpenerRepository(StreamingOpenerDbContext dbContext
             credential.ConnectedAt,
             credential.LastRefreshedAt,
             credential.DisconnectedAt);
+
+    private static ProviderBrowserSessionDto ToDto(ProviderBrowserSession session)
+        => new(
+            session.Id,
+            session.Provider,
+            session.EncryptedStorageStateJson,
+            session.Status,
+            session.UpdatedAt,
+            session.LastValidatedAt,
+            session.DisconnectedAt);
 
     private AudienceRevenueSummaryDto GetAudienceRevenueSync(Guid monitoredChannelId, AudienceMember audience)
     {

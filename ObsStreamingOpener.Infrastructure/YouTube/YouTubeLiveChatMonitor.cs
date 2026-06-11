@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using ObsStreamingOpener.Application.Contracts;
 using ObsStreamingOpener.Application.Dto;
 using ObsStreamingOpener.Application.Exceptions;
+using ObsStreamingOpener.Application.Services;
 using ObsStreamingOpener.Domain;
 using System.Text.Json;
 
@@ -18,8 +19,11 @@ public sealed class YouTubeLiveChatMonitor(
     IProviderEventIdentityService identityService,
     IYouTubeApiClient youtubeApiClient,
     IYouTubeCredentialResolver youtubeCredentialResolver,
-    ILogger<YouTubeLiveChatMonitor> logger) : IStreamingProviderMonitor
+    ILogger<YouTubeLiveChatMonitor> logger,
+    IActivityPublisher? activityPublisher = null) : IStreamingProviderMonitor
 {
+    private readonly IActivityPublisher _activityPublisher = activityPublisher ?? new NoOpActivityPublisher();
+
     public string Name => "youtube-live-chat";
 
     public async Task PollAsync(CancellationToken cancellationToken = default)
@@ -114,21 +118,29 @@ public sealed class YouTubeLiveChatMonitor(
                     message.Currency,
                     payload);
                 providerMessage = providerMessage with { IdentityKey = identityService.CreateMessageIdentityKey(providerMessage) };
-                await providerMessageStore.UpsertMessageAsync(providerMessage, cancellationToken);
+                var savedMessage = await providerMessageStore.UpsertMessageAsync(providerMessage, cancellationToken);
 
                 if (message.IsMonetarySupport)
                 {
-                    await IngestMonetarySupportAsync(connection.MonitoredChannelId, currentStreamId, currentProviderResourceId, message, payload, cancellationToken);
+                    var ingestResult = await IngestMonetarySupportAsync(connection.MonitoredChannelId, currentStreamId, currentProviderResourceId, message, payload, cancellationToken);
+                    if (ingestResult.Stored && !ingestResult.Duplicate)
+                    {
+                        await _activityPublisher.PublishMessageCreatedAsync(savedMessage, cancellationToken);
+                    }
                     continue;
                 }
 
                 if (message.IsMembershipSupport)
                 {
-                    await IngestMembershipSupportAsync(connection.MonitoredChannelId, currentStreamId, currentProviderResourceId, message, payload, cancellationToken);
+                    var ingestResult = await IngestMembershipSupportAsync(connection.MonitoredChannelId, currentStreamId, currentProviderResourceId, message, payload, cancellationToken);
+                    if (ingestResult.Stored && !ingestResult.Duplicate)
+                    {
+                        await _activityPublisher.PublishMessageCreatedAsync(savedMessage, cancellationToken);
+                    }
                     continue;
                 }
 
-                await ingestionService.IngestAsync(new ProviderEvent(
+                var eventResult = await ingestionService.IngestAsync(new ProviderEvent(
                     connection.MonitoredChannelId,
                     currentStreamId,
                     null,
@@ -144,6 +156,10 @@ public sealed class YouTubeLiveChatMonitor(
                     null,
                     message.PublishedAt,
                     payload), cancellationToken);
+                if (eventResult.Stored && !eventResult.Duplicate)
+                {
+                    await _activityPublisher.PublishMessageCreatedAsync(savedMessage, cancellationToken);
+                }
             }
 
             await cursorStore.SetCursorAsync(
@@ -157,9 +173,9 @@ public sealed class YouTubeLiveChatMonitor(
         }
     }
 
-    private async Task IngestMonetarySupportAsync(Guid monitoredChannelId, Guid streamSessionId, Guid? providerResourceId, YouTubeChatMessage message, string payload, CancellationToken cancellationToken)
+    private async Task<IngestedEventResult> IngestMonetarySupportAsync(Guid monitoredChannelId, Guid streamSessionId, Guid? providerResourceId, YouTubeChatMessage message, string payload, CancellationToken cancellationToken)
     {
-        await ingestionService.IngestAsync(new ProviderEvent(
+        return await ingestionService.IngestAsync(new ProviderEvent(
             monitoredChannelId,
             streamSessionId,
             null,
@@ -180,7 +196,7 @@ public sealed class YouTubeLiveChatMonitor(
             ContextJson: payload), cancellationToken);
     }
 
-    private async Task IngestMembershipSupportAsync(Guid monitoredChannelId, Guid streamSessionId, Guid? providerResourceId, YouTubeChatMessage message, string payload, CancellationToken cancellationToken)
+    private async Task<IngestedEventResult> IngestMembershipSupportAsync(Guid monitoredChannelId, Guid streamSessionId, Guid? providerResourceId, YouTubeChatMessage message, string payload, CancellationToken cancellationToken)
     {
         var eventType = message.Type switch
         {
@@ -191,7 +207,7 @@ public sealed class YouTubeLiveChatMonitor(
             _ => StreamEventType.AudienceRelationshipRenewed
         };
 
-        await ingestionService.IngestAsync(new ProviderEvent(
+        var result = await ingestionService.IngestAsync(new ProviderEvent(
             monitoredChannelId,
             streamSessionId,
             null,
@@ -224,6 +240,8 @@ public sealed class YouTubeLiveChatMonitor(
                 IsEstimated: false,
                 payload), cancellationToken);
         }
+
+        return result;
     }
 
     private static string MembershipTitle(YouTubeChatMessage message)

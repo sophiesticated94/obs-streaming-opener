@@ -1,11 +1,12 @@
 import { getJson, query } from "../shared.js";
+import { connectWidgetHub } from "../realtime.js";
 
-const interval = Math.max(Number(query("interval", "2000")), 1000);
 const limit = Math.min(Math.max(Number(query("limit", "10")), 1), 50);
 const channelId = query("channelId", "");
 const source = query("source", "");
 const status = document.getElementById("status");
 const messages = document.getElementById("messages");
+const items = [];
 
 function initials(name) {
   return (name ?? "?")
@@ -33,8 +34,7 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function render(data) {
-  const items = data.messages ?? [];
+function render() {
   if (!items.length) {
     messages.innerHTML = `<div class="empty">Waiting for comments</div>`;
     return;
@@ -52,7 +52,22 @@ function render(data) {
   `).join("");
 }
 
-async function refresh() {
+function addMessage(message) {
+  if (!message?.id || items.some((item) => item.id === message.id)) {
+    return;
+  }
+
+  if (source && message.source !== source) {
+    return;
+  }
+
+  items.unshift(message);
+  items.splice(limit);
+  render();
+  status.textContent = "live";
+}
+
+async function init() {
   const params = new URLSearchParams({ limit: String(limit) });
   if (channelId) {
     params.set("channelId", channelId);
@@ -63,16 +78,18 @@ async function refresh() {
   }
 
   const data = await getJson(`/api/widgets/comment-explorer/data?${params}`);
-  render(data);
+  items.splice(0, items.length, ...(data.messages ?? []));
+  render();
   status.textContent = new Date(data.refreshedAt).toLocaleTimeString();
+
+  await connectWidgetHub({
+    hubUrl: "/hubs/activity",
+    channelId,
+    handlers: { messageCreated: addMessage }
+  });
 }
 
-refresh().catch((error) => {
+init().catch((error) => {
   status.textContent = "offline";
   console.error(error);
 });
-
-setInterval(() => refresh().catch((error) => {
-  status.textContent = "offline";
-  console.error(error);
-}), interval);

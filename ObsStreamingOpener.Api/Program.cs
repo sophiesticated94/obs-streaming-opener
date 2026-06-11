@@ -30,6 +30,8 @@ builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IAlertPublisher, SignalRAlertPublisher>();
+builder.Services.AddScoped<IActivityPublisher, SignalRActivityPublisher>();
+builder.Services.AddScoped<IStatsPublisher, SignalRStatsPublisher>();
 builder.Services.AddHangfire((_, configuration) =>
 {
     var hangfireConnectionString = builder.Configuration.GetConnectionString("StreamingOpener")
@@ -67,6 +69,8 @@ app.UseHangfireDashboard("/hangfire");
 app.UseMiddleware<ExternalHttpExceptionMiddleware>();
 app.MapHealthChecks("/health");
 app.MapHub<AlertHub>("/hubs/alerts");
+app.MapHub<StatsHub>("/hubs/stats");
+app.MapHub<ActivityHub>("/hubs/activity");
 app.MapControllers();
 app.MapFallbackToFile("/dashboard/{*path:nonfile}", "dashboard/index.html");
 app.MapGet("/", () => Results.Redirect("/widgets/stats.html"));

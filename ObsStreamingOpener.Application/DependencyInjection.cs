@@ -17,6 +17,8 @@ public static class DependencyInjection
         services.AddScoped<ICredentialProtector, DataProtectionCredentialProtector>();
         services.AddSingleton<IProviderEventIdentityService, ProviderEventIdentityService>();
         services.AddScoped<IEventIngestionService, EventIngestionService>();
+        services.AddScoped<IStatsPublisher, NoOpStatsPublisher>();
+        services.AddScoped<IActivityPublisher, NoOpActivityPublisher>();
         services.AddScoped<IAudienceIngestionService, AudienceIngestionService>();
         services.AddScoped<ISupportIngestionService, SupportIngestionService>();
         services.AddScoped<IStatsQueryService, StatsQueryService>();

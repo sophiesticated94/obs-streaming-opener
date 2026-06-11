@@ -9,12 +9,14 @@ import {
   MonitoredAccountDto,
   MonitoredChannelDto,
   PollingConfigurationDto,
+  ProviderKind,
   ProviderMessageDto,
   ProviderConnectionConfigDto,
   ProviderResourceDto,
   ForecastSummaryDto,
   RecentEventDto,
   RevenueProviderStatusDto,
+  BrowserLoginResultDto,
   RevenueRankingEntryDto,
   RevenueSummaryDto,
   ProviderSyncResult,
@@ -241,6 +243,14 @@ export class DashboardApiService {
 
   syncRevenue() {
     return this.http.post<ProviderSyncResult[]>('/api/revenue/sync', {});
+  }
+
+  startRevenueProviderBrowserLogin(provider: ProviderKind) {
+    return this.http.post<BrowserLoginResultDto>(`/api/revenue/providers/${provider}/browser-login`, {});
+  }
+
+  clearRevenueProviderBrowserSession(provider: ProviderKind) {
+    return this.http.delete<BrowserLoginResultDto>(`/api/revenue/providers/${provider}/browser-session`);
   }
 
   private toParams(values: Record<string, string | number | null | undefined>) {

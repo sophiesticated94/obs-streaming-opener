@@ -11,8 +11,11 @@ public sealed class SupportIngestionService(
     IEventIngestionService eventIngestionService,
     ISupportTransactionStore supportStore,
     IAudienceIngestionService audienceIngestionService,
-    IClock clock) : ISupportIngestionService
+    IClock clock,
+    IActivityPublisher? activityPublisher = null) : ISupportIngestionService
 {
+    private readonly IActivityPublisher _activityPublisher = activityPublisher ?? new NoOpActivityPublisher();
+
     public async Task<TipIngestionResult> IngestTipAsync(ProviderTipRecord record, CancellationToken cancellationToken = default)
     {
         var normalized = NormalizeRecord(record);
@@ -53,6 +56,20 @@ public sealed class SupportIngestionService(
             IsSyntheticExternalId = normalized.IsSyntheticExternalId || normalized.ExternalTipId is null,
             ContextJson = contextJson
         }, refundedTip?.Id, cancellationToken);
+
+        if (result.Stored && !result.Duplicate)
+        {
+            await _activityPublisher.PublishTipCreatedAsync(new TipRealtimeDto(
+                tip.Id,
+                tip.MonitoredChannelId,
+                tip.StreamSessionId,
+                tip.Provider,
+                tip.ActorName,
+                tip.Amount,
+                tip.Currency,
+                tip.Message,
+                tip.OccurredAt), cancellationToken);
+        }
 
         return new TipIngestionResult(result.EventId, tip.Id, result.Stored, result.Duplicate);
     }

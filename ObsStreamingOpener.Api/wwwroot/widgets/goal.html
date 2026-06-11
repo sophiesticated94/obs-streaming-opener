@@ -16,24 +16,39 @@
   </main>
   <script type="module">
     import { applyTheme, formatNumber, getJson, query } from "/widgets/shared.js";
+    import { connectWidgetHub } from "/widgets/realtime.js";
 
     applyTheme();
-    const interval = Number(query("interval", "2000"));
     const target = Number(query("target", "1000"));
     const label = query("label", "Support goal");
     const channelId = query("channelId", "");
+    let value = 0;
     document.getElementById("goalLabel").textContent = label;
 
-    async function refresh() {
-      const data = await getJson(`/api/stats/current${channelId ? `?channelId=${channelId}` : ""}`);
-      const value = Number(data.tipTotal ?? 0);
+    function render() {
       const percent = target <= 0 ? 0 : Math.min(100, (value / target) * 100);
       document.getElementById("goalValue").textContent = `${formatNumber(value)} / ${formatNumber(target)}`;
       document.getElementById("goalFill").style.width = `${percent}%`;
     }
 
-    refresh().catch(console.error);
-    setInterval(() => refresh().catch(console.error), interval);
+    async function init() {
+      const data = await getJson(`/api/revenue/summary${channelId ? `?channelId=${channelId}` : ""}`);
+      value = Number((data.currencies ?? [])[0]?.gross ?? 0);
+      render();
+
+      await connectWidgetHub({
+        hubUrl: "/hubs/activity",
+        channelId,
+        handlers: {
+          tipCreated: (tip) => {
+            value += Number(tip.amount ?? 0);
+            render();
+          }
+        }
+      });
+    }
+
+    init().catch(console.error);
   </script>
 </body>
 </html>

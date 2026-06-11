@@ -15,8 +15,12 @@ public sealed class StreamDataPoller(
     IYouTubeCredentialResolver youtubeCredentialResolver,
     IClock clock,
     IEnumerable<IStreamingProviderMonitor> streamMonitors,
-    ILogger<StreamDataPoller> logger) : IStreamDataPoller
+    ILogger<StreamDataPoller> logger,
+    IStatsQueryService? statsQueryService = null,
+    IStatsPublisher? statsPublisher = null) : IStreamDataPoller
 {
+    private readonly IStatsPublisher _statsPublisher = statsPublisher ?? new NoOpStatsPublisher();
+
     public async Task PollAsync(CancellationToken cancellationToken = default)
     {
         await PollYouTubeStreamMetricsAsync(cancellationToken);
@@ -71,7 +75,7 @@ public sealed class StreamDataPoller(
 
             if (stats.ConcurrentViewers.HasValue)
             {
-                await statsStore.AddMetricSnapshotIfChangedAsync(CreateSnapshot(
+                await AddSnapshotAndPublishIfChangedAsync(CreateSnapshot(
                     connection,
                     currentSession,
                     MetricKind.ConcurrentViewers,
@@ -82,7 +86,7 @@ public sealed class StreamDataPoller(
 
             if (stats.Likes.HasValue)
             {
-                await statsStore.AddMetricSnapshotIfChangedAsync(CreateSnapshot(
+                await AddSnapshotAndPublishIfChangedAsync(CreateSnapshot(
                     connection,
                     currentSession,
                     MetricKind.Likes,
@@ -91,6 +95,22 @@ public sealed class StreamDataPoller(
                     stats.RawPayloadJson), cancellationToken);
             }
         }
+    }
+
+    private async Task AddSnapshotAndPublishIfChangedAsync(MetricSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        if (!await statsStore.AddMetricSnapshotIfChangedAsync(snapshot, cancellationToken))
+        {
+            return;
+        }
+
+        if (statsQueryService is null)
+        {
+            return;
+        }
+
+        var currentStats = await statsQueryService.GetCurrentStatsAsync(snapshot.MonitoredChannelId, snapshot.ProviderResourceId, snapshot.StreamSessionId, cancellationToken);
+        await _statsPublisher.PublishCurrentStatsAsync(currentStats, cancellationToken);
     }
 
     private MetricSnapshot CreateSnapshot(

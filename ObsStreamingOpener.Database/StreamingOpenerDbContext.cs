@@ -20,6 +20,8 @@ public sealed class StreamingOpenerDbContext(DbContextOptions<StreamingOpenerDbC
 
     public DbSet<ProviderCredential> ProviderCredentials => Set<ProviderCredential>();
 
+    public DbSet<ProviderBrowserSession> ProviderBrowserSessions => Set<ProviderBrowserSession>();
+
     public DbSet<ProviderCursor> ProviderCursors => Set<ProviderCursor>();
 
     public DbSet<StreamEvent> StreamEvents => Set<StreamEvent>();
@@ -261,6 +263,10 @@ public sealed class StreamingOpenerDbContext(DbContextOptions<StreamingOpenerDbC
 
         modelBuilder.Entity<ProviderCredential>()
             .HasIndex(x => new { x.Provider, x.ExternalAccountId })
+            .IsUnique();
+
+        modelBuilder.Entity<ProviderBrowserSession>()
+            .HasIndex(x => x.Provider)
             .IsUnique();
 
         modelBuilder.Entity<ProviderCursor>()

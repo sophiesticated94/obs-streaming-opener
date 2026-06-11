@@ -8,9 +8,11 @@ namespace ObsStreamingOpener.Application.Services;
 public sealed class EventIngestionService(
     IEventStore eventStore,
     IClock clock,
+    IActivityPublisher? activityPublisher = null,
     IProviderEventIdentityService? identityService = null,
     IEnumerable<IStreamEventNotificationHandler>? notificationHandlers = null) : IEventIngestionService
 {
+    private readonly IActivityPublisher _activityPublisher = activityPublisher ?? new NoOpActivityPublisher();
     private readonly IProviderEventIdentityService _identityService = identityService ?? new ProviderEventIdentityService();
     private readonly IReadOnlyList<IStreamEventNotificationHandler> _notificationHandlers = notificationHandlers?.ToList() ?? [];
 
@@ -50,6 +52,7 @@ public sealed class EventIngestionService(
             }
 
             await NotifyAsync(streamEvent, result, cancellationToken);
+            await PublishEventAsync(streamEvent, result, cancellationToken);
             return result;
         }
         catch (NotSupportedException)
@@ -63,6 +66,7 @@ public sealed class EventIngestionService(
             await eventStore.AddEventAsync(streamEvent, cancellationToken);
             var result = new IngestedEventResult(streamEvent.Id, Stored: true, Duplicate: false);
             await NotifyAsync(streamEvent, result, cancellationToken);
+            await PublishEventAsync(streamEvent, result, cancellationToken);
             return result;
         }
     }
@@ -73,6 +77,29 @@ public sealed class EventIngestionService(
         {
             await handler.HandleAsync(streamEvent, result, cancellationToken);
         }
+    }
+
+    private Task PublishEventAsync(StreamEvent streamEvent, IngestedEventResult result, CancellationToken cancellationToken)
+    {
+        if (!result.Stored || result.Duplicate || result.EventId is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _activityPublisher.PublishEventCreatedAsync(new RecentEventDto(
+            result.EventId.Value,
+            streamEvent.MonitoredChannelId,
+            streamEvent.StreamSessionId,
+            streamEvent.AudienceMemberId,
+            streamEvent.ProviderResourceId,
+            streamEvent.Provider,
+            streamEvent.EventType,
+            streamEvent.ActorName,
+            streamEvent.Title,
+            streamEvent.Message,
+            streamEvent.Value,
+            streamEvent.Unit,
+            streamEvent.OccurredAt), cancellationToken);
     }
 
     private static string? CreateContextJson(ProviderEvent providerEvent)

@@ -7,7 +7,6 @@ namespace ObsStreamingOpener.Api.Controllers;
 [ApiController]
 [Route("api/widgets")]
 public sealed class WidgetsController(
-    IStatsQueryService statsQueryService,
     IChannelStore channelStore,
     IProviderMessageStore providerMessageStore,
     IAlertService alertService) : ControllerBase
@@ -36,7 +35,5 @@ public sealed class WidgetsController(
         });
     }
 
-    [HttpGet("{widgetKey}/data")]
-    public async Task<IActionResult> GetData(string widgetKey, [FromQuery] Guid? channelId, CancellationToken cancellationToken)
-        => Ok(await statsQueryService.GetWidgetDataAsync(widgetKey, channelId, cancellationToken));
+    // Generic widget data endpoint removed. Widgets should use specific endpoints or SignalR hubs for minimal, real-time updates.
 }

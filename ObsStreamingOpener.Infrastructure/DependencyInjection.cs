@@ -6,6 +6,7 @@ using ObsStreamingOpener.Infrastructure.Http;
 using ObsStreamingOpener.Infrastructure.Browser;
 using ObsStreamingOpener.Infrastructure.Options;
 using ObsStreamingOpener.Infrastructure.Providers;
+using ObsStreamingOpener.Infrastructure.Providers.Tipply;
 using ObsStreamingOpener.Infrastructure.Time;
 using ObsStreamingOpener.Infrastructure.YouTube;
 
@@ -34,7 +35,7 @@ public static class DependencyInjection
         services.AddScoped<IStreamingProviderMonitor>(sp => sp.GetRequiredService<YouTubeLiveChatMonitor>());
         services.AddScoped<IProviderMonitor>(sp => sp.GetRequiredService<YouTubeLiveChatMonitor>());
 
-        services.AddScoped<ISupportProviderAdapter>(sp => new EmptySupportProviderAdapter(ProviderKind.Tipply, sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<SupportProviderOptions>>()));
+        services.AddScoped<ISupportProviderAdapter, TipplySupportProviderAdapter>();
         services.AddScoped<ISupportProviderAdapter>(sp => new EmptySupportProviderAdapter(ProviderKind.Patronite, sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<SupportProviderOptions>>()));
         services.AddScoped<ISupportProviderAdapter>(sp => new EmptySupportProviderAdapter(ProviderKind.Zrzutka, sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<SupportProviderOptions>>()));
 

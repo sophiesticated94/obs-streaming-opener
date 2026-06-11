@@ -9,34 +9,63 @@ namespace ObsStreamingOpener.Infrastructure.Browser;
 
 public sealed class BrowserSessionFactory(
     ILoginStateService loginStateService,
-    IOptions<BrowserAutomationOptions> options) : IBrowserSessionFactory
+    IOptions<BrowserAutomationOptions> options,
+    IOptionsMonitor<SupportProviderOptions> supportProviderOptions) : IBrowserSessionFactory
 {
     public async Task<BrowserLoginResultDto> StartManualLoginAsync(ProviderKind provider, CancellationToken cancellationToken = default)
     {
         var statePath = await loginStateService.GetStatePathAsync(provider, cancellationToken);
-        Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
-
-        using var playwright = await Playwright.CreateAsync();
-        await using var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+        try
         {
-            Headless = false,
-            SlowMo = options.Value.SlowMo
-        });
-        var context = await browser.NewContextAsync(new BrowserNewContextOptions
-        {
-            StorageStatePath = File.Exists(statePath) ? statePath : null
-        });
-        context.SetDefaultTimeout(options.Value.DefaultTimeoutMilliseconds);
-        context.SetDefaultNavigationTimeout(options.Value.NavigationTimeoutMilliseconds);
-        var page = await context.NewPageAsync();
-        await page.GotoAsync("about:blank");
-        await context.StorageStateAsync(new BrowserContextStorageStateOptions { Path = statePath });
-        await context.CloseAsync();
+            using var playwright = await Playwright.CreateAsync();
+            await using var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+            {
+                Headless = false,
+                SlowMo = options.Value.SlowMo
+            });
+            var context = await browser.NewContextAsync(new BrowserNewContextOptions
+            {
+                StorageStatePath = File.Exists(statePath) ? statePath : null
+            });
+            context.SetDefaultTimeout(options.Value.DefaultTimeoutMilliseconds);
+            context.SetDefaultNavigationTimeout(options.Value.NavigationTimeoutMilliseconds);
+            var page = await context.NewPageAsync();
+            await page.GotoAsync(ResolveLoginUrl(provider));
 
-        return new BrowserLoginResultDto(
-            provider,
-            "ManualLoginStarted",
-            "A headful browser session was opened. Configure provider login URLs before using this endpoint for real login capture.",
-            statePath);
+            while (!page.IsClosed)
+            {
+                await Task.Delay(1000, cancellationToken);
+            }
+
+            var storageStateJson = await context.StorageStateAsync();
+            await loginStateService.SaveStateAsync(provider, storageStateJson, cancellationToken);
+            await context.CloseAsync();
+
+            return new BrowserLoginResultDto(
+                provider,
+                "Saved",
+                "Browser login finished and encrypted storage state was saved.",
+                null);
+        }
+        finally
+        {
+            await loginStateService.DeleteTemporaryStateAsync(statePath, cancellationToken);
+        }
+    }
+
+    private string ResolveLoginUrl(ProviderKind provider)
+    {
+        var optionsForProvider = supportProviderOptions.Get(provider.ToString());
+        if (!string.IsNullOrWhiteSpace(optionsForProvider.LoginUrl))
+        {
+            return optionsForProvider.LoginUrl;
+        }
+
+        if (!string.IsNullOrWhiteSpace(optionsForProvider.DashboardUrl))
+        {
+            return optionsForProvider.DashboardUrl;
+        }
+
+        return provider == ProviderKind.Tipply ? "https://tipply.pl/" : "about:blank";
     }
 }

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ObsStreamingOpener.Application.Contracts;
 using ObsStreamingOpener.Application.Dto;
+using ObsStreamingOpener.Application.Exceptions;
 
 namespace ObsStreamingOpener.Application.Services;
 
@@ -34,6 +35,12 @@ public sealed class RevenueSynchronizer(
 
                 results.Add(new ProviderSyncResult(adapter.Provider, Success: true, tips, patrons));
                 SetStatus(adapter.Provider, "Ok", null);
+            }
+            catch (AuthenticationRequiredException ex)
+            {
+                logger.LogInformation(ex, "Revenue provider {Provider} requires authentication.", adapter.Provider);
+                results.Add(new ProviderSyncResult(adapter.Provider, Success: false, tips, patrons, ex.Message));
+                SetStatus(adapter.Provider, "NeedsLogin", ex.Message);
             }
             catch (Exception ex)
             {

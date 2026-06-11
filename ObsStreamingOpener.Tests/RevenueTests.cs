@@ -1,10 +1,13 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using ObsStreamingOpener.Application.Contracts;
 using ObsStreamingOpener.Application.Dto;
 using ObsStreamingOpener.Application.Services;
 using ObsStreamingOpener.Database;
 using ObsStreamingOpener.Database.Model;
 using ObsStreamingOpener.Domain;
+using ObsStreamingOpener.Infrastructure.Browser;
+using ObsStreamingOpener.Infrastructure.Providers.Tipply;
 
 namespace ObsStreamingOpener.Tests;
 
@@ -91,6 +94,62 @@ public sealed class RevenueTests
 
         var pln = Assert.Single(forecast.Currencies);
         Assert.Equal(100, pln.EstimatedGross);
+    }
+
+    [Fact]
+    public void TipplyParser_MapsTipsToProviderRecords()
+    {
+        const string json = """
+        {
+          "data": [
+            {
+              "id": "tip-1",
+              "nick": "Zosia",
+              "amount": "12,50 PLN",
+              "currency": "pln",
+              "message": "super stream",
+              "createdAt": "2026-06-03T12:15:00Z",
+              "paymentMethod": "blik"
+            }
+          ]
+        }
+        """;
+        var channelId = Guid.NewGuid();
+
+        var tip = Assert.Single(TipplyTipParser.ParseTips(json));
+        var record = TipplyTipParser.ToProviderTip(channelId, tip, DateTimeOffset.UtcNow, json);
+
+        Assert.Equal(channelId, record.MonitoredChannelId);
+        Assert.Equal(ProviderKind.Tipply, record.Provider);
+        Assert.Equal("tip-1", record.ExternalTipId);
+        Assert.Equal("Zosia", record.ActorName);
+        Assert.Equal(12.50m, record.Amount);
+        Assert.Equal("PLN", record.Currency);
+        Assert.Equal(PaymentMethod.Blik, record.PaymentMethod);
+        Assert.Equal(TipSource.Browser, record.Source);
+    }
+
+    [Fact]
+    public async Task LoginStateService_StoresEncryptedStateAndDeletesTemporaryFile()
+    {
+        await using var fixture = await RevenueFixture.CreateAsync();
+        var keyDir = Path.Combine(Path.GetTempPath(), "obs-streaming-opener-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(keyDir);
+        var protector = new DataProtectionCredentialProtector(DataProtectionProvider.Create(new DirectoryInfo(keyDir)));
+        var service = new LoginStateService(fixture.Repository, protector);
+        const string storageState = "{\"cookies\":[{\"name\":\"session\",\"value\":\"secret\"}],\"origins\":[]}";
+
+        await service.SaveStateAsync(ProviderKind.Tipply, storageState);
+        var saved = await fixture.Repository.GetBrowserSessionAsync(ProviderKind.Tipply);
+        var statePath = await service.GetStatePathAsync(ProviderKind.Tipply);
+        var restored = await File.ReadAllTextAsync(statePath);
+        await service.DeleteTemporaryStateAsync(statePath);
+
+        Assert.True(await service.HasStateAsync(ProviderKind.Tipply));
+        Assert.NotNull(saved);
+        Assert.DoesNotContain("secret", saved!.EncryptedStorageStateJson);
+        Assert.Equal(storageState, restored);
+        Assert.False(File.Exists(statePath));
     }
 
     private static ProviderTipRecord CreateTip(Guid channelId, string externalId, decimal amount, TipKind kind, string? refundedExternalTipId = null)

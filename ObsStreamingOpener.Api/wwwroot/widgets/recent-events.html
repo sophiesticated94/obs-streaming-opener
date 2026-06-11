@@ -12,10 +12,12 @@
   </main>
   <script type="module">
     import { applyTheme, formatMoney, getJson, query } from "/widgets/shared.js";
+    import { connectWidgetHub } from "/widgets/realtime.js";
 
     applyTheme();
-    const interval = Number(query("interval", "1500"));
     const channelId = query("channelId", "");
+    const limit = Math.min(Math.max(Number(query("limit", "10")), 1), 50);
+    const events = [];
 
     function renderEvent(event) {
       const amount = event.amount ? formatMoney(event.amount, event.currency) : "";
@@ -26,15 +28,37 @@
       </article>`;
     }
 
-    async function refresh() {
-      const data = await getJson(`/api/events/recent?limit=10${channelId ? `&channelId=${channelId}` : ""}`);
-      document.getElementById("events").innerHTML = data.length
-        ? data.map(renderEvent).join("")
+    function render() {
+      document.getElementById("events").innerHTML = events.length
+        ? events.map(renderEvent).join("")
         : `<article class="event"><strong>Ready</strong><p>Waiting for stream events</p><span class="muted"></span></article>`;
     }
 
-    refresh().catch(console.error);
-    setInterval(() => refresh().catch(console.error), interval);
+    function addEvent(event) {
+      if (!event?.id || events.some((item) => item.id === event.id)) {
+        return;
+      }
+
+      events.unshift(event);
+      events.splice(limit);
+      render();
+    }
+
+    async function init() {
+      const data = await getJson(channelId
+        ? `/api/channels/${channelId}/events/recent?limit=${limit}`
+        : `/api/events/recent?limit=${limit}`);
+      events.splice(0, events.length, ...(data ?? []));
+      render();
+
+      await connectWidgetHub({
+        hubUrl: "/hubs/activity",
+        channelId,
+        handlers: { eventCreated: addEvent }
+      });
+    }
+
+    init().catch(console.error);
   </script>
 </body>
 </html>

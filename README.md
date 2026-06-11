@@ -4,7 +4,8 @@ Local-first .NET Web API for OBS browser-source widgets. It stores stream events
 
 ## Requirements
 
-- .NET SDK pinned by `global.json`
+- .NET 11 SDK `11.0.100-preview.5.26302.115`, pinned by `global.json`
+- Node.js/npm compatible with Angular 22; current development setup uses Node `24.x` and npm `11.x`
 - PowerShell examples below assume Windows
 - Google OAuth client for YouTube account login
 - YouTube Data API key is optional fallback for public video stats
@@ -39,6 +40,8 @@ npm --cache .\.npm-cache --prefix .\ObsStreamingOpener.Dashboard install
 npm --cache .\.npm-cache --prefix .\ObsStreamingOpener.Dashboard run build
 dotnet run --project .\ObsStreamingOpener.Api\ObsStreamingOpener.Api.csproj
 ```
+
+The dashboard uses Angular 22 and TypeScript 6. Keep using the workspace-local npm cache shown above.
 
 Default local URL:
 
@@ -248,7 +251,7 @@ Compatibility shortcuts use the default channel unless `channelId` is provided:
 - `GET /api/events/recent?channelId=&provider=&type=&limit=`
 - `GET /api/stats/current?channelId=`
 - `GET /api/stats/summary?channelId=&from=&to=`
-- `GET /api/widgets/{widgetKey}/data?channelId=`
+- Widgets use small domain endpoints plus SignalR deltas. The generic `/api/widgets/{widgetKey}/data` endpoint has been removed.
 
 Development-only:
 
@@ -282,12 +285,29 @@ Collected data includes:
 - Recent comments as `CommentCreated` events
 - Visible subscribers as best-effort `AudienceRelationshipStarted` events; YouTube may hide or limit subscriber identities, so the reliable source is the audience count metric
 
+## Tipply Support Sync
+
+Tipply support sync uses a browser session, not stored login/password.
+
+1. Configure:
+   - `SupportProviders:Tipply:Enabled=true`
+   - `SupportProviders:Tipply:BaseUrl=https://proxy.tipply.pl`
+   - `SupportProviders:Tipply:LoginUrl=https://tipply.pl/login`
+2. Open dashboard revenue provider actions and run browser login for Tipply.
+3. Log in manually in the headful browser and close the browser window when finished.
+4. The app stores encrypted browser storage state in SQLite through Data Protection.
+5. Run `POST /api/revenue/sync` or the dashboard sync action.
+
+The crawler reads `GET https://proxy.tipply.pl/user/tips?limit=50&offset=0&filter=undefined&search=undefined`, pages until it reaches an empty page or the last cursor, maps records into `StreamEventType.Tip` plus `Tip`, and reports `NeedsLogin` when the session expires.
+
 ## Adding A Provider
 
 1. Add the provider client/wrapper in `ObsStreamingOpener.Infrastructure`.
 2. Implement `IStreamingProviderMonitor` or `IAccountProviderMonitor`.
 3. Normalize provider data into `ProviderEvent`, `ProviderAudienceRelationship`, or metric snapshots.
 4. Store page tokens/cursors through `IProviderCursorStore`.
-5. Register stream-scoped monitors as `IStreamingProviderMonitor` and account-scoped monitors as `IAccountProviderMonitor`.
+5. For support providers, implement `ISupportProviderAdapter` and return `ProviderTipRecord` / `ProviderPatronRecord`.
+6. Store page tokens/cursors through `IProviderCursorStore`.
+7. Register stream-scoped monitors as `IStreamingProviderMonitor`, account-scoped monitors as `IAccountProviderMonitor`, and support adapters as `ISupportProviderAdapter`.
 
-Tipply and Patronite are currently registered as stubs.
+Patronite and Zrzutka are currently registered as stubs. Tipply has a Playwright-backed browser crawler.

@@ -3,6 +3,7 @@ import { forkJoin } from 'rxjs';
 import { DashboardApiService } from '../../core/api/dashboard-api.service';
 import {
   ForecastSummaryDto,
+  ProviderKind,
   ProviderSyncResult,
   RevenueProviderStatusDto,
   RevenueRankingEntryDto,
@@ -73,6 +74,10 @@ import { StatusBannerComponent } from '../../shared/components/status-banner.com
               <span>{{ provider.provider }}</span>
               <small>{{ provider.enabled ? provider.status : 'Disabled' }}</small>
               <small>{{ provider.lastError ?? provider.lastSyncedAt ?? '' }}</small>
+              @if (provider.provider === 'Tipply') {
+                <button type="button" class="secondary" (click)="browserLogin(provider.provider)">Browser login</button>
+                <button type="button" class="secondary" (click)="clearBrowserSession(provider.provider)">Clear session</button>
+              }
             </div>
           } @empty {
             <p>No support providers configured.</p>
@@ -135,6 +140,30 @@ export class RevenuePage implements OnInit {
         this.lastSync.set(result);
         this.messageTone.set('info');
         this.message.set('Revenue sync finished.');
+        this.load();
+      },
+      error: (error) => this.fail(error)
+    });
+  }
+
+  browserLogin(provider: ProviderKind): void {
+    this.messageTone.set('info');
+    this.message.set(`Opening ${provider} login. Close the browser window after logging in.`);
+    this.api.startRevenueProviderBrowserLogin(provider).subscribe({
+      next: (result) => {
+        this.messageTone.set('info');
+        this.message.set(result.message);
+        this.load();
+      },
+      error: (error) => this.fail(error)
+    });
+  }
+
+  clearBrowserSession(provider: ProviderKind): void {
+    this.api.clearRevenueProviderBrowserSession(provider).subscribe({
+      next: (result) => {
+        this.messageTone.set('info');
+        this.message.set(result.message);
         this.load();
       },
       error: (error) => this.fail(error)

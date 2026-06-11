@@ -1,40 +1,67 @@
-using Microsoft.Extensions.Options;
 using ObsStreamingOpener.Application.Contracts;
 using ObsStreamingOpener.Application.Dto;
 using ObsStreamingOpener.Domain;
-using ObsStreamingOpener.Infrastructure.Options;
 
 namespace ObsStreamingOpener.Infrastructure.Browser;
 
-public sealed class LoginStateService(IOptions<BrowserAutomationOptions> options) : ILoginStateService
+public sealed class LoginStateService(
+    IProviderBrowserSessionStore browserSessionStore,
+    ICredentialProtector credentialProtector) : ILoginStateService
 {
-    public Task<bool> HasStateAsync(ProviderKind provider, CancellationToken cancellationToken = default)
-        => Task.FromResult(File.Exists(GetStatePath(provider)));
-
-    public Task<string> GetStatePathAsync(ProviderKind provider, CancellationToken cancellationToken = default)
+    public async Task<bool> HasStateAsync(ProviderKind provider, CancellationToken cancellationToken = default)
     {
-        Directory.CreateDirectory(options.Value.AuthStateDirectory);
-        return Task.FromResult(GetStatePath(provider));
+        var session = await browserSessionStore.GetBrowserSessionAsync(provider, cancellationToken);
+        return session is not null
+            && session.DisconnectedAt is null
+            && !string.IsNullOrWhiteSpace(session.EncryptedStorageStateJson);
     }
 
-    public Task<BrowserLoginResultDto> ClearStateAsync(ProviderKind provider, CancellationToken cancellationToken = default)
+    public async Task<string> GetStatePathAsync(ProviderKind provider, CancellationToken cancellationToken = default)
     {
-        var path = GetStatePath(provider);
-        if (File.Exists(path))
+        var path = CreateTemporaryStatePath(provider);
+        var session = await browserSessionStore.GetBrowserSessionAsync(provider, cancellationToken);
+        if (session is null || session.DisconnectedAt is not null || string.IsNullOrWhiteSpace(session.EncryptedStorageStateJson))
         {
-            File.Delete(path);
+            return path;
         }
 
-        return Task.FromResult(new BrowserLoginResultDto(provider, "Cleared", "Browser storage state was removed.", path));
+        var stateJson = credentialProtector.Unprotect(session.EncryptedStorageStateJson);
+        await File.WriteAllTextAsync(path, stateJson, cancellationToken);
+        return path;
     }
 
-    private string GetStatePath(ProviderKind provider)
+    public async Task SaveStateAsync(ProviderKind provider, string storageStateJson, CancellationToken cancellationToken = default)
     {
-        var fileName = provider.ToString().ToLowerInvariant() switch
+        if (string.IsNullOrWhiteSpace(storageStateJson))
         {
-            "zrzutka" => "zrzutka.json",
-            var value => $"{value}.json"
-        };
-        return Path.Combine(options.Value.AuthStateDirectory, fileName);
+            await browserSessionStore.MarkBrowserSessionStatusAsync(provider, "NeedsLogin", cancellationToken: cancellationToken);
+            return;
+        }
+
+        var encrypted = credentialProtector.Protect(storageStateJson);
+        await browserSessionStore.UpsertBrowserSessionAsync(provider, encrypted, "Ready", cancellationToken);
+    }
+
+    public Task DeleteTemporaryStateAsync(string statePath, CancellationToken cancellationToken = default)
+    {
+        if (!string.IsNullOrWhiteSpace(statePath) && File.Exists(statePath))
+        {
+            File.Delete(statePath);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public async Task<BrowserLoginResultDto> ClearStateAsync(ProviderKind provider, CancellationToken cancellationToken = default)
+    {
+        await browserSessionStore.ClearBrowserSessionAsync(provider, cancellationToken);
+        return new BrowserLoginResultDto(provider, "Cleared", "Encrypted browser storage state was removed.", null);
+    }
+
+    private static string CreateTemporaryStatePath(ProviderKind provider)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "obs-streaming-opener", "browser-state");
+        Directory.CreateDirectory(directory);
+        return Path.Combine(directory, $"{provider.ToString().ToLowerInvariant()}-{Guid.NewGuid():N}.json");
     }
 }

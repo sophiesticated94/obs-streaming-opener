@@ -8,7 +8,6 @@ public sealed class StatsQueryService(
     IStatsStore statsStore,
     IEventStore eventStore,
     IChannelStore channelStore,
-    IProviderResourceStore resourceStore,
     IClock clock) : IStatsQueryService
 {
     public Task<CurrentStatsDto> GetCurrentStatsAsync(Guid? monitoredChannelId = null, CancellationToken cancellationToken = default)
@@ -93,25 +92,4 @@ public sealed class StatsQueryService(
             allEvents.Count(x => x.OccurredAt >= fromValue && x.OccurredAt <= toValue));
     }
 
-    public async Task<WidgetDataDto> GetWidgetDataAsync(string widgetKey, Guid? monitoredChannelId = null, CancellationToken cancellationToken = default)
-    {
-        var now = clock.UtcNow;
-        var channel = monitoredChannelId.HasValue
-            ? await channelStore.GetChannelAsync(monitoredChannelId.Value, cancellationToken)
-            : await channelStore.GetDefaultChannelAsync(cancellationToken);
-
-        if (channel is null)
-        {
-            throw new InvalidOperationException("Monitored channel was not found.");
-        }
-
-        var current = await GetCurrentStatsAsync(channel.Id, cancellationToken);
-        var summary = await GetSummaryAsync(channel.Id, now.AddHours(-4), now, cancellationToken: cancellationToken);
-        var recent = await eventStore.GetRecentEventsAsync(channel.Id, null, null, 20, cancellationToken: cancellationToken);
-        var content = await resourceStore.GetRecentResourcesAsync(channel.Id, null, 10, cancellationToken);
-        var upcoming = await resourceStore.GetUpcomingResourcesAsync(channel.Id, 5, cancellationToken);
-        var comments = await eventStore.GetRecentEventsAsync(channel.Id, ProviderKind.YouTube, StreamEventType.CommentCreated, 10, cancellationToken: cancellationToken);
-
-        return new WidgetDataDto(widgetKey, channel.Id, current, summary, recent, now, content, upcoming, comments);
-    }
 }

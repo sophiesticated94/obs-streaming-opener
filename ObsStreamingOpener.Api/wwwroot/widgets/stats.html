@@ -24,27 +24,41 @@
   </main>
   <script type="module">
     import { applyTheme, formatNumber, getJson, query } from "/widgets/shared.js";
+    import { connectWidgetHub } from "/widgets/realtime.js";
 
     applyTheme();
-    const interval = Number(query("interval", "2000"));
     const channelId = query("channelId", "");
 
-    async function refresh() {
-      const data = await getJson(`/api/widgets/stats/data${channelId ? `?channelId=${channelId}` : ""}`);
-      document.getElementById("viewers").textContent = formatNumber(data.currentStats.concurrentViewers);
-      document.getElementById("likes").textContent = formatNumber(data.currentStats.likes);
-      document.getElementById("chatRate").textContent = formatNumber(data.currentStats.chatMessagesPerMinute);
-      document.getElementById("tips").textContent = formatNumber(data.currentStats.tipTotal);
-      document.getElementById("audience").textContent = formatNumber(data.currentStats.audienceMemberCount);
-      document.getElementById("paidAudience").textContent = formatNumber(data.currentStats.paidAudienceMemberCount);
-      document.getElementById("streamTitle").textContent = data.currentStats.streamTitle ?? "Current stream";
-      const latest = data.recentEvents[0];
-      document.getElementById("latestEvent").textContent = latest ? `${latest.actorName ?? latest.provider}: ${latest.message ?? latest.title ?? latest.eventType}` : "Waiting for events";
-      document.getElementById("updated").textContent = new Date(data.generatedAt).toLocaleTimeString();
+    function applyStats(data) {
+      document.getElementById("viewers").textContent = formatNumber(data.concurrentViewers);
+      document.getElementById("likes").textContent = formatNumber(data.likes);
+      document.getElementById("chatRate").textContent = formatNumber(data.chatMessagesPerMinute);
+      document.getElementById("tips").textContent = formatNumber(data.tipTotal);
+      document.getElementById("audience").textContent = formatNumber(data.audienceMemberCount);
+      document.getElementById("paidAudience").textContent = formatNumber(data.paidAudienceMemberCount);
+      document.getElementById("streamTitle").textContent = data.streamTitle ?? "Current stream";
     }
 
-    refresh().catch(console.error);
-    setInterval(() => refresh().catch(console.error), interval);
+    async function init() {
+      try {
+        const data = await getJson(channelId ? `/api/channels/${channelId}/stats/current` : "/api/stats/current");
+        applyStats(data);
+      } catch (e) {
+        console.error(e);
+      }
+
+      try {
+        await connectWidgetHub({
+          hubUrl: "/hubs/stats",
+          channelId,
+          handlers: { currentStats: applyStats }
+        });
+      } catch (e) {
+        console.error("SignalR init failed", e);
+      }
+    }
+
+    init();
   </script>
 </body>
 </html>
